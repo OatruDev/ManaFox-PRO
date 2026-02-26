@@ -1,3 +1,4 @@
+// /js/modules/jumpstart.js
 import { state, saveData } from '../state.js';
 import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
@@ -145,7 +146,6 @@ function showJSUltimateWinner(sortedPlayers) {
     });
 }
 
-// Exposición al HTML
 window.setJSPlayers = setJSPlayers;
 window.setJSView = setJSView;
 window.openJSMatchModal = openJSMatchModal;
@@ -155,3 +155,4 @@ window.setJSWinner = setJSWinner;
 window.revertJSSwissWinner = revertJSSwissWinner;
 window.finishSwiss = finishSwiss;
 window.quickAddJS = quickAddJS;
+window.generateNextSwissRound = generateNextSwissRound;

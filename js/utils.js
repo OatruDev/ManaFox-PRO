@@ -22,13 +22,28 @@ export function preloadGifs() {
     Object.values(GIFS).forEach(url => { const img = new Image(); img.src = url; }); 
 }
 
-// --- OPTIMIZED CONFETTI ---
 export function triggerConfetti(c) {
     try { 
         if(typeof window.confetti !== 'function') return; 
         const m = {'W':'#facc15','U':'#3b82f6','B':'#8b5cf6','R':'#ef4444','G':'#22c55e'}; 
         let cols = (c && c.length) ? c.map(x=>m[x]) : ['#facc15','#3b82f6','#8b5cf6','#ef4444','#22c55e']; 
-        window.confetti({ particleCount: 300, spread: 150, origin: { y: 0.5 }, colors: cols, zIndex: 100000 }); 
+        
+        const duration = 3000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100000, colors: cols };
+
+        function randomInRange(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        const interval = setInterval(function() {
+            const timeLeft = animationEnd - Date.now();
+            if (timeLeft <= 0) return clearInterval(interval);
+
+            const particleCount = 50 * (timeLeft / duration);
+            window.confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+            window.confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+        }, 250);
     } catch (e) { console.warn("Confetti failed", e); } 
 }
 

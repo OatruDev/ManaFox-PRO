@@ -4,9 +4,6 @@ import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
 import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme } from '../utils.js';
 
-// ==========================================
-// PANTALLA 1: SETUP
-// ==========================================
 export function initCommander() {
     if (state.step === 1) {
         document.getElementById('count-players').innerText = state.players;
@@ -28,9 +25,6 @@ function updateCount(t, v) {
 function applyDandLPreset() { state.players = 2; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura"]; goToDecks(); }
 function applyDJLPreset() { state.players = 3; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura", "Julio"]; goToDecks(); }
 
-// ==========================================
-// PANTALLA 2: MAZOS
-// ==========================================
 function goToDecks() { 
     if (state.deckData.length === 0) state.deckData = Array.from({ length: state.decks }, () => ({ name: '', colors: [] })); 
     buildDeckDOM(); 
@@ -60,9 +54,6 @@ function openLibraryManager() {
 function closeLibraryManager() { document.getElementById('library-modal').classList.add('hidden'); buildDeckDOM(); }
 async function deleteSavedDeck(idx) { const c = await mfModal.show("Delete Deck?", `Permanently delete "${esc(state.savedDecks[idx].name)}"?`, "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); openLibraryManager(); } }
 
-// ==========================================
-// PANTALLA 3: JUGADORES, LOCKS Y BANS
-// ==========================================
 function savePlayerInputs() {
     for (let i = 0; i < state.players; i++) {
         let input = document.getElementById(`p-in-${i}`);
@@ -82,10 +73,20 @@ function setPlayerLock(pIdx, dIdx) {
 function toggleBan(pIdx, dIdx) {
     savePlayerInputs();
     if (!state.playerBans[pIdx]) state.playerBans[pIdx] = [];
+
+    if (state.playerLocks[pIdx] !== undefined && state.playerLocks[pIdx] !== -1) return;
+
+    let validD = state.deckData.filter(d => d.name.trim() !== "");
+    let maxBans = Math.max(0, validD.length - 2);
+
     let idx = state.playerBans[pIdx].indexOf(dIdx);
-    if (idx > -1) state.playerBans[pIdx].splice(idx, 1);
-    else {
-        if (state.playerLocks[pIdx] === dIdx) return;
+    if (idx > -1) {
+        state.playerBans[pIdx].splice(idx, 1);
+    } else {
+        if (state.playerBans[pIdx].length >= maxBans) {
+            mfModal.show("Limit Reached", "You must leave at least 2 decks available in the pool.", "warning");
+            return;
+        }
         state.playerBans[pIdx].push(dIdx);
     }
     saveData(); goToPlayers();
@@ -94,19 +95,30 @@ function toggleBan(pIdx, dIdx) {
 function goToPlayers() { 
     const c = document.getElementById('player-inputs-container'); c.innerHTML = ''; 
     if (state.savedPlayers.length > 0) { document.getElementById('saved-players-section').classList.remove('hidden'); renderSavedPlayers(); } 
+    
     let validD = state.deckData.filter(d => d.name.trim() !== ""); 
+    let maxBans = Math.max(0, validD.length - 2);
     if (!state.playerBans) state.playerBans = [];
+    
     for (let i = 0; i < state.players; i++) { 
         if (!state.playerBans[i]) state.playerBans[i] = [];
         const def = state.tempPlayerNames[i] || ""; 
         let lockVal = state.playerLocks[i] !== undefined ? state.playerLocks[i] : -1;
+        let hasLock = lockVal !== -1;
+        let atBanLimit = state.playerBans[i].length >= maxBans;
+        
         let deckOpts = `<option value="-1">🎲 Random Deck</option>` + validD.map((d, idx) => `<option value="${idx}" ${lockVal === idx ? 'selected' : ''}>${esc(d.name)}</option>`).join(''); 
+        
         let bansHTML = validD.map((d, dIdx) => {
-            const isLocked = lockVal === dIdx; const isBanned = state.playerBans[i].includes(dIdx);
-            return `<button onclick="toggleBan(${i}, ${dIdx})" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isLocked ? 'opacity-30 pointer-events-none' : ''}">
+            const isBanned = state.playerBans[i].includes(dIdx);
+            const isDisabled = hasLock || (!isBanned && atBanLimit);
+            const titleMsg = hasLock ? "Cannot ban when a deck is locked." : (isDisabled ? `Max bans reached (${maxBans})` : "Ban this deck");
+            
+            return `<button onclick="toggleBan(${i}, ${dIdx})" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}">
                 <span class="material-symbols-outlined text-[10px] align-middle mr-1">${isBanned ? 'block' : 'check_box_outline_blank'}</span> ${esc(d.name)}
             </button>`;
         }).join('');
+        
         c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button onclick="removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="setPlayerLock(${i}, parseInt(this.value))" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex justify-between items-center"><span>Vetoes (Bans)</span><span class="text-slate-600 font-normal normal-case text-[8px] flex items-center gap-1">Swipe <span class="material-symbols-outlined text-[10px]">arrow_forward</span></span></label><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`; 
     } 
     switchScreen(3); 
@@ -118,24 +130,18 @@ async function deleteSavedPlayer(i) { const c = await mfModal.show("Remove Playe
 function removePlayer(i) { if (state.players <= 1) return; state.tempPlayerNames.splice(i, 1); state.playerLocks.splice(i, 1); state.playerBans.splice(i, 1); state.players--; goToPlayers(); saveData(); }
 function addExtraPlayer() { state.players++; goToPlayers(); saveData(); }
 
-// ==========================================
-// PANTALLA 4: ASIGNACIÓN Y ALGORITMO GREEDY
-// ==========================================
 function executeAssignment() { 
     let validD = state.deckData.filter(d => d.name.trim() !== ""); 
     let pool = validD.map((d, index) => ({ ...d, origIdx: index })); 
     state.currentMatch = []; 
     
-    // 1. Process Locks 
     for (let i = 0; i < state.players; i++) { 
         let pref = state.playerLocks[i] !== undefined ? state.playerLocks[i] : -1; 
         if (pref !== -1) { let idx = pool.findIndex(d => d.origIdx === pref); if (idx > -1) pool.splice(idx, 1); } 
     } 
     
-    // 2. Shuffle Pool 
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; } 
 
-    // 3. Greedy Assignment (Constraint First)
     let unassignedPlayers = [];
     for (let i = 0; i < state.players; i++) {
         if (state.playerLocks[i] === undefined || state.playerLocks[i] === -1) unassignedPlayers.push({ idx: i, bans: state.playerBans[i] || [] });
@@ -176,9 +182,6 @@ function buildResultsDOM() {
     } else remSec.classList.add('hidden'); 
 }
 
-// ==========================================
-// PANTALLA 5: BATALLA Y HOLD-TO-ADD
-// ==========================================
 function initBattlefield() { playTransition(GIFS.BATTLE, 2600, () => { renderBattlefield(); switchScreen(5); }); }
 
 let holdTimer = null; let holdInterval = null; let eliminationTimer = null;
@@ -253,9 +256,6 @@ async function resetLife() { toggleCenterMenu(); const confirmReset = await mfMo
 function toggleFullScreen() { toggleCenterMenu(); if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { console.warn("Fullscreen error"); }); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
 function rollD20All() { toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let final = {}; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if (r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); state.currentMatch.forEach((p, i) => { if (!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
 
-// ==========================================
-// PANTALLA 6: FIN DE PARTIDA E HISTORIAL
-// ==========================================
 function endMatchManual() { toggleCenterMenu(); goToScreen6Manual(); }
 function goToScreen6Manual() { state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-black text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
 
@@ -265,7 +265,7 @@ function showUltimateWinner(idx) {
         triggerConfetti(w.deck ? w.deck.colors : []);
         state.history.unshift({ date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), pairings: state.currentMatch, winner: w.player, mode: 'Commander' }); 
         saveData(); renderHistory();
-        document.getElementById('screen-6').innerHTML = `<div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full"><div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-yellow-400 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)]">emoji_events</span></div><h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${esc(w.player)}</h2><h3 class="text-xl font-bold text-slate-300 mb-8 bg-white/5 px-4 py-1 rounded-full border border-white/10 uppercase">${w.deck ? esc(w.deck.name) : ''}</h3><div class="bg-app-surface p-6 rounded-2xl border border-white/5 shadow-lg mb-10 w-full max-w-sm"><p class="text-slate-200 italic text-lg leading-relaxed">"${quote}"</p></div><button onclick="startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button></div>`; 
+        document.getElementById('screen-6').innerHTML = `<div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full"><div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-yellow-400 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)]">emoji_events</span></div><h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${esc(w.player)}</h2><h3 class="text-xl font-bold text-slate-300 mb-8 bg-white/5 px-4 py-1 rounded-full border border-white/10 uppercase">${w.deck ? esc(w.deck.name) : ''}</h3><div class="bg-app-surface p-6 rounded-2xl border border-white/5 shadow-lg mb-10 w-full max-w-sm"><p class="text-slate-200 italic text-lg leading-relaxed">"${quote}"</p></div><button onclick="window.startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button></div>`; 
         switchScreen(6); 
     }); 
 }
@@ -279,9 +279,6 @@ function renderHistory() {
 }
 async function deleteHistoryEntry(idx) { const isConfirmed = await mfModal.show("Delete Match?", "This action will remove the match from the history.", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
 
-// ==========================================
-// EXPOSICIÓN AL HTML (Event Delegation Wrapper)
-// ==========================================
 window.updateCount = updateCount;
 window.applyDandLPreset = applyDandLPreset;
 window.applyDJLPreset = applyDJLPreset;
@@ -314,9 +311,6 @@ window.showUltimateWinner = showUltimateWinner;
 window.deleteHistoryEntry = deleteHistoryEntry;
 window.startOver = startOver;
 
-// ==========================================
-// CONTROLADORES DE RUTAS PARA MAIN.JS
-// ==========================================
 export function handleCommanderNext() {
     if (state.step === 1) goToDecks(); 
     else if (state.step === 2) { 
