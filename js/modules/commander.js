@@ -2,7 +2,7 @@
 import { state, saveData } from '../state.js';
 import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
-import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme } from '../utils.js';
+import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme, getArchetype } from '../utils.js';
 
 export function initCommander() {
     if (state.step === 1) {
@@ -23,7 +23,6 @@ function updateCount(t, v) {
     saveData(); 
 }
 
-// FIX PRESETS: Laura siempre banea a Eva01 (índice 4 en baseDecks)
 function applyDandLPreset() { 
     state.players = 2; state.decks = 7; 
     state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); 
@@ -49,8 +48,23 @@ function buildDeckDOM() {
     const c = document.getElementById('deck-inputs-container'); c.innerHTML = ''; 
     const lib = [...baseDecks, ...state.savedDecks]; 
     state.deckData.forEach((d, i) => { 
+        const arch = getArchetype(d.colors);
         const colorsHTML = state.manaColors.map(m => `<button onclick="toggleColor(${i},'${m.id}')" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id) ? 'active' : 'opacity-30'}">${m.icon}</button>`).join(''); 
-        c.innerHTML += `<div class="bg-app-surface p-4 rounded-2xl border border-white/5 shadow-sm"><div class="flex justify-between items-center mb-2"><label class="text-[10px] font-bold text-app-primary uppercase">Deck #${i + 1}</label><div class="flex gap-2"><select onchange="loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name)}</option>`).join('')}</select><button onclick="removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button></div></div><input type="text" maxlength="40" oninput="state.deckData[${i}].name=this.value; saveData();" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white" value="${esc(d.name)}" placeholder="Name"><div class="flex gap-2">${colorsHTML}</div></div>`; 
+        c.innerHTML += `
+        <div class="bg-app-surface p-4 rounded-2xl border border-white/5 shadow-sm">
+            <div class="flex justify-between items-center mb-2">
+                <div class="flex flex-col">
+                    <label class="text-[10px] font-bold text-app-primary uppercase">Deck #${i + 1}</label>
+                    <span class="text-[9px] font-black text-slate-500 uppercase tracking-tighter">${arch}</span>
+                </div>
+                <div class="flex gap-2">
+                    <select onchange="loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name)}</option>`).join('')}</select>
+                    <button onclick="removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button>
+                </div>
+            </div>
+            <input type="text" maxlength="40" oninput="state.deckData[${i}].name=this.value; saveData();" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white" value="${esc(d.name)}" placeholder="Name">
+            <div class="flex gap-2">${colorsHTML}</div>
+        </div>`; 
     }); 
 }
 
@@ -59,7 +73,6 @@ function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors
 function removeDeck(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
 function addExtraDeck() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
 
-// FIX: Inyección del esqueleto HTML defensivo para evitar "Cannot read properties of null"
 function openLibraryManager() { 
     const modal = document.getElementById('library-modal');
     if (!document.getElementById('library-list')) {
@@ -98,12 +111,9 @@ function setPlayerLock(pIdx, dIdx) {
 function toggleBan(pIdx, dIdx) {
     savePlayerInputs();
     if (!state.playerBans[pIdx]) state.playerBans[pIdx] = [];
-
     if (state.playerLocks[pIdx] !== undefined && state.playerLocks[pIdx] !== -1) return;
-
     let validD = state.deckData.filter(d => d.name.trim() !== "");
     let maxBans = Math.max(0, validD.length - 2);
-
     let idx = state.playerBans[pIdx].indexOf(dIdx);
     if (idx > -1) {
         state.playerBans[pIdx].splice(idx, 1);
@@ -120,30 +130,24 @@ function toggleBan(pIdx, dIdx) {
 function goToPlayers() { 
     const c = document.getElementById('player-inputs-container'); c.innerHTML = ''; 
     if (state.savedPlayers.length > 0) { document.getElementById('saved-players-section').classList.remove('hidden'); renderSavedPlayers(); } 
-    
     let validD = state.deckData.filter(d => d.name.trim() !== ""); 
     let maxBans = Math.max(0, validD.length - 2);
     if (!state.playerBans) state.playerBans = [];
-    
     for (let i = 0; i < state.players; i++) { 
         if (!state.playerBans[i]) state.playerBans[i] = [];
         const def = state.tempPlayerNames[i] || ""; 
         let lockVal = state.playerLocks[i] !== undefined ? state.playerLocks[i] : -1;
         let hasLock = lockVal !== -1;
         let atBanLimit = state.playerBans[i].length >= maxBans;
-        
         let deckOpts = `<option value="-1">🎲 Random Deck</option>` + validD.map((d, idx) => `<option value="${idx}" ${lockVal === idx ? 'selected' : ''}>${esc(d.name)}</option>`).join(''); 
-        
         let bansHTML = validD.map((d, dIdx) => {
             const isBanned = state.playerBans[i].includes(dIdx);
             const isDisabled = hasLock || (!isBanned && atBanLimit);
             const titleMsg = hasLock ? "Cannot ban when a deck is locked." : (isDisabled ? `Max bans reached (${maxBans})` : "Ban this deck");
-            
             return `<button onclick="toggleBan(${i}, ${dIdx})" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}">
                 <span class="material-symbols-outlined text-[10px] align-middle mr-1">${isBanned ? 'block' : 'check_box_outline_blank'}</span> ${esc(d.name)}
             </button>`;
         }).join('');
-        
         c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button onclick="removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="setPlayerLock(${i}, parseInt(this.value))" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex justify-between items-center"><span>Vetoes (Bans)</span><span class="text-slate-600 font-normal normal-case text-[8px] flex items-center gap-1">Swipe <span class="material-symbols-outlined text-[10px]">arrow_forward</span></span></label><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`; 
     } 
     switchScreen(3); 
@@ -159,20 +163,12 @@ function executeAssignment() {
     let validD = state.deckData.filter(d => d.name.trim() !== ""); 
     let pool = validD.map((d, index) => ({ ...d, origIdx: index })); 
     state.currentMatch = []; 
-    
-    // FIX UNKNOWN DECK: Sanitizamos locks y bans fuera de rango (ej: por haber borrado un mazo)
     for (let i = 0; i < state.players; i++) { 
         let pref = state.playerLocks[i] !== undefined ? state.playerLocks[i] : -1; 
         if(pref >= validD.length || pref < 0) { pref = -1; state.playerLocks[i] = -1; }
-        
-        if (pref !== -1) { 
-            let idx = pool.findIndex(d => d.origIdx === pref); 
-            if (idx > -1) pool.splice(idx, 1); 
-        } 
+        if (pref !== -1) { let idx = pool.findIndex(d => d.origIdx === pref); if (idx > -1) pool.splice(idx, 1); } 
     } 
-    
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; } 
-
     let unassignedPlayers = [];
     for (let i = 0; i < state.players; i++) {
         if (state.playerLocks[i] === undefined || state.playerLocks[i] === -1) {
@@ -181,20 +177,17 @@ function executeAssignment() {
         }
     }
     unassignedPlayers.sort((a, b) => b.bans.length - a.bans.length);
-    
     let tempMatch = [];
     for (let i = 0; i < state.players; i++) {
         let pref = state.playerLocks[i];
         if (pref !== undefined && pref !== -1 && validD[pref]) tempMatch[i] = { deck: validD[pref] };
     }
-    
     for (let pObj of unassignedPlayers) {
         let validIdx = pool.findIndex(d => !pObj.bans.includes(d.origIdx));
         if (validIdx > -1) tempMatch[pObj.idx] = { deck: pool.splice(validIdx, 1)[0] };
         else if (pool.length > 0) tempMatch[pObj.idx] = { deck: pool.shift() };
         else tempMatch[pObj.idx] = { deck: null };
     }
-    
     for (let i = 0; i < state.players; i++) { 
         let pN = state.tempPlayerNames[i] || `Player ${i+1}`; 
         let mDeck = tempMatch[i] ? tempMatch[i].deck : null;
@@ -245,7 +238,6 @@ function renderBattlefield() {
     if (count === 2) grid.classList.add('bf-2p'); else if (count === 3) grid.classList.add('bf-3p'); else if (count === 4) grid.classList.add('bf-4p-grid'); else if (count === 5) grid.classList.add('bf-5p'); else grid.classList.add('bf-6p'); 
     if (count === 4 && state.layoutMode === 'cross') grid.classList.replace('bf-4p-grid', 'bf-4p-cross'); 
     if (count === 4) document.getElementById('layout-toggle-btn').classList.remove('hidden'); 
-    
     grid.innerHTML = ''; 
     state.currentMatch.forEach((p, i) => { 
         let rotDeg = 0; let pos = ''; 
@@ -260,31 +252,83 @@ function renderBattlefield() {
             if (count >= 4 && (i === 0 || i === 1)) rotDeg = 180; 
             if (count === 6 && i === 2) rotDeg = 180; 
         } 
-
         let flexDir = 'flex-col'; let hitbox1 = '1'; let hitbox2 = '-1'; 
         if (rotDeg === 180) { hitbox1 = '-1'; hitbox2 = '1'; } 
         else if (rotDeg === 90) { flexDir = 'flex-row'; hitbox1 = '-1'; hitbox2 = '1'; } 
         else if (rotDeg === -90) { flexDir = 'flex-row'; hitbox1 = '1'; hitbox2 = '-1'; } 
-        
         let deadOverlay = p.isDead ? `<div class="absolute inset-0 bg-zinc-950/85 backdrop-grayscale z-30 flex flex-col items-center justify-center pointer-events-auto transition-all duration-500" style="transform: rotate(${rotDeg}deg)"><span class="material-symbols-outlined text-[24vmin] text-[#1e83f5] drop-shadow-[0_0_35px_rgba(30,131,245,0.8)]">skull</span><div class="mt-4 px-6 py-2 bg-[#1e83f5]/20 border border-[#1e83f5] text-white text-xs font-black tracking-widest uppercase rounded-full shadow-[0_0_15px_rgba(30,131,245,0.5)]">Eliminated</div><p class="text-slate-300 font-medium italic mt-4 text-center px-8 text-sm drop-shadow-md">"${esc(p.deathQuote)}"</p></div>` : ''; 
         let lifeUI = p.isDead ? '' : `<span id="life-display-${i}" class="text-[clamp(4rem,12vh,9rem)] font-black tracking-tighter leading-none text-white">${p.life}</span>`; 
-
         let uiWrapper = `<div class="absolute inset-0 z-20 pointer-events-none" style="transform: rotate(${rotDeg}deg);"><div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full text-center transition-opacity ${p.isDead ? 'opacity-20' : ''}"><h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate">${esc(p.player)}</h3><p class="text-[12px] sm:text-sm font-bold text-white/90 truncate mb-1">${p.deck ? esc(p.deck.name) : ''}</p>${lifeUI}</div><div class="absolute bottom-4 left-0 w-full px-4 flex justify-between items-end ${p.isDead ? 'hidden' : ''}"><div class="flex gap-2 flex-wrap pointer-events-auto">${renderCmdrDamageIcons(p)}</div><button onclick="openCmdrModal(${i}, ${rotDeg})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto shadow-lg active:scale-95 transition-transform backdrop-blur-sm"><span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span></button></div></div>`;
-
         grid.innerHTML += `<div class="relative w-full h-full flex flex-col justify-center items-center ${pos} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}"><div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}"><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox1})" ontouchstart="handleTapStart(event, ${i}, ${hitbox1})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none">${hitbox1 === '1' ? '+' : '-'}</span></div><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox2})" ontouchstart="handleTapStart(event, ${i}, ${hitbox2})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none">${hitbox2 === '1' ? '+' : '-'}</span></div></div>${uiWrapper}${deadOverlay}</div>`; 
     }); 
 }
 
-function renderCmdrDamageIcons(player) { let html = ''; for (let attackerIdx in player.cmdrDmg) { let dmg = player.cmdrDmg[attackerIdx]; if (dmg > 0 && !state.currentMatch[attackerIdx].isDead) { html += `<div class="size-10 rounded-full bg-red-900/90 border border-red-500/50 flex items-center justify-center flex-col shadow-lg"><span class="text-[9px] font-bold text-red-200 leading-none">${esc(state.currentMatch[attackerIdx].player[0].toUpperCase())}</span><span class="text-[14px] font-black text-white leading-none">${dmg}</span></div>`; } } return html; }
+function renderCmdrDamageIcons(player) { 
+    let html = ''; 
+    for (let attackerIdx in player.cmdrDmg) { 
+        let dmg = player.cmdrDmg[attackerIdx]; 
+        // FIX: El daño se muestra de forma individual por carta
+        if (dmg > 0 && state.currentMatch[attackerIdx] && !state.currentMatch[attackerIdx].isDead) { 
+            html += `<div class="size-10 rounded-full bg-red-900/90 border border-red-500/50 flex items-center justify-center flex-col shadow-lg"><span class="text-[9px] font-bold text-red-200 leading-none">${esc(state.currentMatch[attackerIdx].player[0].toUpperCase())}</span><span class="text-[14px] font-black text-white leading-none">${dmg}</span></div>`; 
+        } 
+    } 
+    return html; 
+}
 function toggleLayout() { state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; renderBattlefield(); toggleCenterMenu(); saveData(); }
 
 let currentCmdrTarget = -1;
 function openCmdrModal(idx, rotDeg) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button onclick="changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button onclick="changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>` : '').join(''); const box = document.getElementById('cmdr-modal-box'); box.style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
-function changeCmdrDmg(tI, aI, v) { let t = state.currentMatch[tI]; let old = t.cmdrDmg[aI] || 0; let n = Math.max(0, old + v); t.cmdrDmg[aI] = n; t.life -= (n - old); saveData(); openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 20); }
+
+function changeCmdrDmg(tI, aI, v) { 
+    let t = state.currentMatch[tI]; 
+    let oldVal = t.cmdrDmg[aI] || 0; 
+    let newVal = Math.max(0, oldVal + v); 
+    t.cmdrDmg[aI] = newVal; 
+    // FIX: El daño de comandante resta vida 1 a 1
+    t.life -= (newVal - oldVal); 
+    saveData(); 
+    openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); 
+    renderBattlefield(); 
+    setTimeout(() => checkEliminations(), 20); 
+}
+
 function closeCmdrModal() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
 let isCheckingDeath = false;
-async function checkEliminations() { if (isCheckingDeath) return; isCheckingDeath = true; for (let i = 0; i < state.currentMatch.length; i++) { let p = state.currentMatch[i]; if (!p.isDead) { let cmdrDeath = false; if (p.cmdrDmg) { cmdrDeath = Object.values(p.cmdrDmg).some(d => d >= 21); } if (p.life <= 0 || cmdrDeath) { let reason = cmdrDeath ? "21 Commander Damage" : "0 Life"; let isEliminated = await mfModal.show("Confirm Elimination", `${esc(p.player)} reached ${reason}.`, "skull", "confirm"); if (isEliminated) { p.isDead = true; p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)]; if (currentCmdrTarget === i) closeCmdrModal(); } else { if (cmdrDeath) { for (let k in p.cmdrDmg) if (p.cmdrDmg[k] >= 21) p.cmdrDmg[k] = 20; } else if (p.life <= 0) { p.life = 1; } } saveData(); renderBattlefield(); } } } let alive = state.currentMatch.filter(p => !p.isDead); if (alive.length === 1 && state.currentMatch.length > 1) { setTimeout(() => { showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1200); } isCheckingDeath = false; }
+async function checkEliminations() { 
+    if (isCheckingDeath) return; 
+    isCheckingDeath = true; 
+    for (let i = 0; i < state.currentMatch.length; i++) { 
+        let p = state.currentMatch[i]; 
+        if (!p.isDead) { 
+            let cmdrDeath = false; 
+            if (p.cmdrDmg) { 
+                // FIX: Solo muere si un ÚNICO comandante llega a 21
+                cmdrDeath = Object.values(p.cmdrDmg).some(d => d >= 21); 
+            } 
+            if (p.life <= 0 || cmdrDeath) { 
+                let reason = cmdrDeath ? "21 Commander Damage (Single Source)" : "0 Life"; 
+                let isEliminated = await mfModal.show("Confirm Elimination", `${esc(p.player)} reached ${reason}.`, "skull", "confirm"); 
+                if (isEliminated) { 
+                    p.isDead = true; 
+                    p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)]; 
+                    if (currentCmdrTarget === i) closeCmdrModal(); 
+                } else { 
+                    if (cmdrDeath) { 
+                        for (let k in p.cmdrDmg) if (p.cmdrDmg[k] >= 21) p.cmdrDmg[k] = 20; 
+                    } else if (p.life <= 0) { p.life = 1; } 
+                } 
+                saveData(); 
+                renderBattlefield(); 
+            } 
+        } 
+    } 
+    let alive = state.currentMatch.filter(p => !p.isDead); 
+    if (alive.length === 1 && state.currentMatch.length > 1) { 
+        setTimeout(() => { showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1200); 
+    } 
+    isCheckingDeath = false; 
+}
 
 let menuOpen = false;
 function toggleCenterMenu() { menuOpen = !menuOpen; const opts = document.getElementById('center-menu-options'); const btn = document.getElementById('center-menu-btn'); if (menuOpen) { opts.classList.remove('opacity-0', 'pointer-events-none'); opts.classList.add('pointer-events-auto'); btn.innerHTML = '<span class="material-symbols-outlined text-3xl">close</span>'; } else { opts.classList.add('opacity-0', 'pointer-events-none'); opts.classList.remove('pointer-events-auto'); btn.innerHTML = '<span class="material-symbols-outlined text-3xl text-white">apps</span>'; } }
