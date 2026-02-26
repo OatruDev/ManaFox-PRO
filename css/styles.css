@@ -35,3 +35,27 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 @keyframes fluidChaos { 0% { background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%; } 33% { background-position: 100% 100%, 0% 0%, 0% 100%, 100% 0%; } 66% { background-position: 0% 100%, 100% 100%, 100% 0%, 0% 0%; } 100% { background-position: 100% 0%, 0% 100%, 0% 0%, 100% 100%; } }
 .bg-texture::after { content: ""; position: absolute; inset: 0; opacity: 0.2; mix-blend-mode: overlay; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"); z-index: 1; }
 #main-header { border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+/* --- LOTUS STYLE RADIAL MENU --- */
+.radial-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+    z-index: 55; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+}
+.radial-overlay.active { opacity: 1; pointer-events: auto; }
+
+.radial-btn {
+    position: absolute; top: 50%; left: 50%; width: 124px; height: 44px;
+    margin-left: -62px; margin-top: -22px; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.8); border: 2px solid rgba(255,255,255,0.15);
+    opacity: 0; pointer-events: none; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform: translate(0, 0) scale(0.5); z-index: 60; cursor: pointer;
+}
+.radial-overlay.active .radial-btn { opacity: 1; pointer-events: auto; }
+
+.radial-overlay.active .radial-pos-1 { transform: translate(-95px, -85px) rotate(-25deg); }
+.radial-overlay.active .radial-pos-2 { transform: translate(95px, -85px) rotate(25deg); }
+.radial-overlay.active .radial-pos-3 { transform: translate(-95px, 85px) rotate(25deg); }
+.radial-overlay.active .radial-pos-4 { transform: translate(95px, 85px) rotate(-25deg); }
+.radial-overlay.active .radial-pos-5 { transform: translate(0px, 135px) rotate(0deg); }

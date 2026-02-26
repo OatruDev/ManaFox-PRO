@@ -100,29 +100,23 @@ function syncDecksToLibrary() {
     let allE = [...baseDecks, ...state.savedDecks]; 
     let nw = false; 
     state.deckData.forEach((d, i) => { 
-        // Extracción forzada desde el DOM para evitar que se guarden vacíos al presionar "Siguiente" rápido
         const inputNode = document.getElementById(`deck-input-${i}`);
-        if (inputNode && inputNode.value !== undefined) {
-            d.name = inputNode.value.trim();
-        }
-        
-        if (d.name === "") {
-            d.name = `Deck ${i + 1}`;
-            if (inputNode) inputNode.value = d.name;
-        }
+        if (inputNode && inputNode.value !== undefined) { d.name = inputNode.value.trim(); }
+        if (d.name === "") { d.name = `Deck ${i + 1}`; if (inputNode) inputNode.value = d.name; }
         
         let isUnique = !allE.some(ex => ex.name.toLowerCase() === d.name.toLowerCase());
         if (isUnique) { 
-            state.savedDecks.push({ name: esc(d.name), colors: [...d.colors] }); 
-            allE.push({ name: esc(d.name), colors: [...d.colors] });
+            // FIX: No codificamos al guardar en RAM, solo al renderizar
+            state.savedDecks.push({ name: d.name, colors: [...d.colors] }); 
+            allE.push({ name: d.name, colors: [...d.colors] });
             nw = true; 
         } 
     }); 
     if (nw) saveData(); 
 }
 
+// FIX: Retirado el syncDeks de aquí para evitar que el basurero "reviva" mazos.
 function openLibraryManager() { 
-    syncDecksToLibrary(); 
     const modal = document.getElementById('library-modal');
     if (!document.getElementById('library-list')) {
         modal.innerHTML = `
@@ -188,7 +182,19 @@ function goToPlayers() {
         let lockVal = state.playerLocks[i] !== undefined ? state.playerLocks[i] : -1;
         let hasLock = lockVal !== -1;
         let atBanLimit = state.playerBans[i].length >= maxBans;
-        let deckOpts = `<option value="-1">🎲 Random Deck</option>` + validD.map((d, idx) => `<option value="${idx}" ${lockVal === idx ? 'selected' : ''}>${esc(d.name)}</option>`).join(''); 
+        
+        // FIX: Evitar que dos jugadores seleccionen el mismo mazo
+        let deckOpts = `<option value="-1">🎲 Random Deck</option>`;
+        validD.forEach((d, dIdx) => {
+            let lockedByOther = -1;
+            for(let j=0; j<state.players; j++){ if(j !== i && state.playerLocks[j] === dIdx) { lockedByOther = j; break; } }
+            let isLockedByMe = lockVal === dIdx;
+            let disabledAttr = lockedByOther !== -1 ? 'disabled' : '';
+            let optClass = lockedByOther !== -1 ? 'text-slate-600' : 'text-slate-200';
+            let lockText = lockedByOther !== -1 ? `(P${lockedByOther + 1})` : '';
+            deckOpts += `<option value="${dIdx}" class="${optClass}" ${isLockedByMe ? 'selected' : ''} ${disabledAttr}>${esc(d.name)} ${lockText}</option>`;
+        });
+        
         let bansHTML = validD.map((d, dIdx) => {
             const isBanned = state.playerBans[i].includes(dIdx);
             const isDisabled = hasLock || (!isBanned && atBanLimit);
@@ -330,12 +336,12 @@ function renderBattlefield() {
             if (count === 6 && i === 2) rotDeg = 180; 
         } 
         
-        let flexDir = 'flex-col'; let hitbox1 = '1'; let hitbox2 = '-1'; 
-        if (rotDeg === 180) { hitbox1 = '-1'; hitbox2 = '1'; } 
-        else if (rotDeg === 90) { flexDir = 'flex-row'; hitbox1 = '-1'; hitbox2 = '1'; } 
-        else if (rotDeg === -90) { flexDir = 'flex-row'; hitbox1 = '1'; hitbox2 = '-1'; } 
+        // FIX: Reajustado el sistema Flex para evitar desbordes y rotaciones extrañas. 
+        // Siempre es flex-col para que el Hitbox inferior sea + y el superior sea -.
+        let flexDir = 'flex-col'; let hitbox1 = '-1'; let hitbox2 = '1'; 
+        if (rotDeg === 180) { hitbox1 = '1'; hitbox2 = '-1'; } 
+        else if (rotDeg === -90) { hitbox1 = '1'; hitbox2 = '-1'; } 
         
-        // FIX: Calculadora de límites para Cross Layout (Evita que el contenido se desborde al rotar)
         let innerW = '100%'; let innerH = '100%';
         if (count === 4 && state.layoutMode === 'cross' && (rotDeg === 90 || rotDeg === -90)) {
             innerW = '40svh'; innerH = '50vw';
@@ -428,16 +434,14 @@ async function checkEliminations() {
 let menuOpen = false;
 function toggleCenterMenu() { 
     menuOpen = !menuOpen;
-    const menu = document.getElementById('match-menu-options');
+    const menu = document.getElementById('radial-menu-overlay');
     const icon = document.getElementById('center-menu-icon');
     if (menu) {
         if(menuOpen) { 
-            menu.classList.remove('opacity-0', 'pointer-events-none', 'scale-75'); 
-            menu.classList.add('opacity-100', 'pointer-events-auto', 'scale-100'); 
+            menu.classList.add('active'); 
             icon.innerText = 'close'; icon.classList.add('rotate-90');
         } else { 
-            menu.classList.add('opacity-0', 'pointer-events-none', 'scale-75'); 
-            menu.classList.remove('opacity-100', 'pointer-events-auto', 'scale-100'); 
+            menu.classList.remove('active'); 
             icon.innerText = 'apps'; icon.classList.remove('rotate-90');
         }
     }
@@ -463,7 +467,9 @@ function showUltimateWinner(idx) {
 
 function startOver() { 
     releaseWakeLock();
+    // FIX: Limpieza forzosa de bans y locks al volver a empezar para no ensuciar partidas nuevas
     state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; state.undoStack = [];
+    state.playerBans = []; state.playerLocks = [];
     state.step = state.gameMode === 'commander' ? 1 : 7;
     saveData(); 
     switchScreen(state.step); 
@@ -512,7 +518,10 @@ window.deleteHistoryEntry = deleteHistoryEntry;
 window.startOver = startOver;
 
 export function handleCommanderNext() {
-    if (state.step === 1) goToDecks(); 
+    if (state.step === 1) { 
+        state.playerLocks = []; state.playerBans = []; // FIX: Purga la memoria al iniciar partida manual
+        goToDecks(); 
+    } 
     else if (state.step === 2) { 
         syncDecksToLibrary(); 
         goToPlayers(); 
