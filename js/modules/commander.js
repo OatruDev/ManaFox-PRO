@@ -22,8 +22,22 @@ function updateCount(t, v) {
     document.getElementById('count-' + t).innerText = state[t]; 
     saveData(); 
 }
-function applyDandLPreset() { state.players = 2; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura"]; goToDecks(); }
-function applyDJLPreset() { state.players = 3; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura", "Julio"]; goToDecks(); }
+
+// FIX PRESETS: Laura siempre banea a Eva01 (índice 4 en baseDecks)
+function applyDandLPreset() { 
+    state.players = 2; state.decks = 7; 
+    state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); 
+    state.tempPlayerNames = ["Daniel", "Laura"]; 
+    state.playerLocks = []; state.playerBans = [[], [4]]; 
+    saveData(); goToDecks(); 
+}
+function applyDJLPreset() { 
+    state.players = 3; state.decks = 7; 
+    state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); 
+    state.tempPlayerNames = ["Daniel", "Laura", "Julio"]; 
+    state.playerLocks = []; state.playerBans = [[], [4], []]; 
+    saveData(); goToDecks(); 
+}
 
 function goToDecks() { 
     if (state.deckData.length === 0) state.deckData = Array.from({ length: state.decks }, () => ({ name: '', colors: [] })); 
@@ -45,11 +59,22 @@ function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors
 function removeDeck(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
 function addExtraDeck() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
 
+// FIX: Inyección del esqueleto HTML defensivo para evitar "Cannot read properties of null"
 function openLibraryManager() { 
+    const modal = document.getElementById('library-modal');
+    if (!document.getElementById('library-list')) {
+        modal.innerHTML = `
+        <div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col relative max-h-[80vh]">
+            <button onclick="window.closeLibraryManager()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition z-20"><span class="material-symbols-outlined">close</span></button>
+            <h3 class="font-black text-xl mb-2 text-white tracking-widest uppercase flex items-center gap-2"><span class="material-symbols-outlined text-app-primary">library_books</span> Deck Library</h3>
+            <p class="text-[10px] text-slate-400 mb-4 uppercase tracking-widest">Saved custom decks</p>
+            <div id="library-list" class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-2"></div>
+        </div>`;
+    }
     const list = document.getElementById('library-list'); list.innerHTML = ''; 
     if (state.savedDecks.length === 0) list.innerHTML = '<p class="text-center text-slate-500 italic mt-8 font-medium">No custom decks saved yet.</p>'; 
-    else state.savedDecks.forEach((d, i) => { const mH = d.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px]"></i>`).join(' '); list.innerHTML += `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between"><div class="flex flex-col overflow-hidden pr-2"><span class="font-bold text-sm text-white truncate">${esc(d.name)}</span><div class="flex gap-1 mt-1 text-slate-400">${mH}</div></div><button onclick="deleteSavedDeck(${i})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20"><span class="material-symbols-outlined text-[18px]">delete</span></button></div>`; }); 
-    document.getElementById('library-modal').classList.remove('hidden'); 
+    else state.savedDecks.forEach((d, i) => { const mH = d.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px]"></i>`).join(' '); list.innerHTML += `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between"><div class="flex flex-col overflow-hidden pr-2"><span class="font-bold text-sm text-white truncate">${esc(d.name)}</span><div class="flex gap-1 mt-1 text-slate-400">${mH}</div></div><button onclick="window.deleteSavedDeck(${i})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20"><span class="material-symbols-outlined text-[18px]">delete</span></button></div>`; }); 
+    modal.classList.remove('hidden'); 
 }
 function closeLibraryManager() { document.getElementById('library-modal').classList.add('hidden'); buildDeckDOM(); }
 async function deleteSavedDeck(idx) { const c = await mfModal.show("Delete Deck?", `Permanently delete "${esc(state.savedDecks[idx].name)}"?`, "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); openLibraryManager(); } }
@@ -135,22 +160,32 @@ function executeAssignment() {
     let pool = validD.map((d, index) => ({ ...d, origIdx: index })); 
     state.currentMatch = []; 
     
+    // FIX UNKNOWN DECK: Sanitizamos locks y bans fuera de rango (ej: por haber borrado un mazo)
     for (let i = 0; i < state.players; i++) { 
         let pref = state.playerLocks[i] !== undefined ? state.playerLocks[i] : -1; 
-        if (pref !== -1) { let idx = pool.findIndex(d => d.origIdx === pref); if (idx > -1) pool.splice(idx, 1); } 
+        if(pref >= validD.length || pref < 0) { pref = -1; state.playerLocks[i] = -1; }
+        
+        if (pref !== -1) { 
+            let idx = pool.findIndex(d => d.origIdx === pref); 
+            if (idx > -1) pool.splice(idx, 1); 
+        } 
     } 
     
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; } 
 
     let unassignedPlayers = [];
     for (let i = 0; i < state.players; i++) {
-        if (state.playerLocks[i] === undefined || state.playerLocks[i] === -1) unassignedPlayers.push({ idx: i, bans: state.playerBans[i] || [] });
+        if (state.playerLocks[i] === undefined || state.playerLocks[i] === -1) {
+            let safeBans = (state.playerBans[i] || []).filter(b => b >= 0 && b < validD.length);
+            unassignedPlayers.push({ idx: i, bans: safeBans });
+        }
     }
     unassignedPlayers.sort((a, b) => b.bans.length - a.bans.length);
     
     let tempMatch = [];
     for (let i = 0; i < state.players; i++) {
-        if (state.playerLocks[i] !== undefined && state.playerLocks[i] !== -1) tempMatch[i] = { deck: validD[state.playerLocks[i]] };
+        let pref = state.playerLocks[i];
+        if (pref !== undefined && pref !== -1 && validD[pref]) tempMatch[i] = { deck: validD[pref] };
     }
     
     for (let pObj of unassignedPlayers) {
@@ -161,8 +196,9 @@ function executeAssignment() {
     }
     
     for (let i = 0; i < state.players; i++) { 
-        let pN = state.tempPlayerNames[i]; let deck = tempMatch[i].deck;
-        state.currentMatch.push({ player: pN, deck: deck, life: 40, cmdrDmg: {}, isDead: false, themeVars: getPlayerTheme(deck ? deck.colors : []), deathQuote: "" }); 
+        let pN = state.tempPlayerNames[i] || `Player ${i+1}`; 
+        let mDeck = tempMatch[i] ? tempMatch[i].deck : null;
+        state.currentMatch.push({ player: pN, deck: mDeck, life: 40, cmdrDmg: {}, isDead: false, themeVars: getPlayerTheme(mDeck ? mDeck.colors : []), deathQuote: "" }); 
     } 
     state.remainingDecks = [...pool]; saveData(); buildResultsDOM(); switchScreen(4); 
 }
@@ -260,7 +296,6 @@ function endMatchManual() { toggleCenterMenu(); goToScreen6Manual(); }
 function goToScreen6Manual() { state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-black text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
 
 function showUltimateWinner(idx) { 
-    // FIX: Incrementado el tiempo para que el GIF tenga tiempo de sobra y sincronice perfecto
     playTransition(GIFS.WINNER, 3200, () => { 
         state.matchFinished = true; const w = state.currentMatch[idx]; const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
         triggerConfetti(w.deck ? w.deck.colors : []);
@@ -276,7 +311,6 @@ function startOver() {
     state.step = state.gameMode === 'commander' ? 1 : 7;
     saveData(); 
     switchScreen(state.step); 
-    // FIX: Forzamos renderizar el historial si volvemos a Commander
     if(state.gameMode === 'commander') renderHistory();
 }
 

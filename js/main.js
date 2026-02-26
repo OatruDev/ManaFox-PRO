@@ -44,19 +44,30 @@ function setupGlobalListeners() {
 
     const creditsBtn = document.getElementById('btn-show-credits');
     if (creditsBtn) {
-        creditsBtn.addEventListener('click', async () => {
+        // FIX: Eliminado el async/await que colgaba la promesa del modal custom
+        creditsBtn.addEventListener('click', () => {
             let msg = "Versión: v1.3 Modular (Offline PWA)\n\n- Arquitectura: ES Modules.\n- Nuevo Motor Veto (Bans/Locks) activado.\n- Transiciones SPA Instantáneas.";
             let customHtml = `
                 <div class="flex flex-col w-full">
                     <button id="btn-hard-reset" class="w-full mb-2 bg-red-900/20 border border-red-500/30 text-red-400 py-3 rounded-xl font-bold hover:bg-red-500 hover:text-white transition active:scale-95 text-xs flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[14px]">delete_forever</span> Borrar Memoria y Reiniciar App</button>
                     <button onclick="document.getElementById('mf-modal').classList.add('opacity-0', 'pointer-events-none', 'scale-95');" class="w-full bg-app-primary text-white py-3 rounded-xl font-bold hover:bg-app-primary/80 transition active:scale-95 text-xs">Cerrar</button>
                 </div>`;
-            await mfModal.show("ManaFox: Zorro Corp", msg, "help", "custom", customHtml);
             
-            document.getElementById('btn-hard-reset').addEventListener('click', async () => {
-                const confirm = await mfModal.show("Borrar todo", "¿Estás seguro? Esto borrará toda tu configuración.", "warning", "confirm");
-                if(confirm) resetLocalState();
-            });
+            mfModal.show("ManaFox: Zorro Corp", msg, "help", "custom", customHtml);
+            
+            // Inyectamos el listener asíncronamente un instante después de renderizar
+            setTimeout(() => {
+                let resetBtn = document.getElementById('btn-hard-reset');
+                if(resetBtn) {
+                    resetBtn.addEventListener('click', async () => {
+                        mfModal.hide(); // Ocultamos el actual
+                        setTimeout(async () => {
+                            const confirm = await mfModal.show("Borrar todo", "¿Estás seguro? Esto borrará toda tu configuración.", "warning", "confirm");
+                            if(confirm) resetLocalState();
+                        }, 350); // Esperamos la animación CSS
+                    });
+                }
+            }, 50);
         });
     }
 }
@@ -94,7 +105,6 @@ function renderAndOpenModeHub() {
 }
 
 function changeMode(newMode) {
-    // ESTO ESTABA BORRADO EN TU CÓDIGO. Es vital.
     state.gameMode = newMode;
     state.step = newMode === 'commander' ? 1 : 7;
     try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } catch(e) {}
