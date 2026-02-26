@@ -73,7 +73,8 @@ function quickAddJS(n) {
 function generateJSSwiss() {
     let names = [...state.tempPlayerNames].slice(0, state.js.count);
     for (let i = names.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [names[i], names[j]] = [names[j], names[i]]; }
-    state.js.players = names.map(n => ({ name: n, points: 0, played: [] }));
+    // FIX: Agregamos el array 'defeated' para el motor de desempate Head-to-Head
+    state.js.players = names.map(n => ({ name: n, points: 0, played: [], defeated: [] }));
     state.js.totalRounds = Math.log2(state.js.count); state.js.rounds = []; state.js.currentRound = 0; state.js.currentView = 'round';
     let r1 = []; for(let i=0; i<state.js.count; i+=2) { r1.push({ p1: state.js.players[i].name, p2: state.js.players[i+1].name, winner: null, ready1: false, ready2: false }); }
     state.js.rounds.push(r1); saveData(); renderJSSwiss();
@@ -99,7 +100,14 @@ function renderJSSwiss() {
     if(!tabs || !mCont) return;
     tabs.innerHTML = `<button onclick="setJSView('round')" class="flex-1 py-3 rounded-xl font-bold transition-all ${state.js.currentView==='round' ? 'bg-app-js text-black shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-app-surface border border-white/10 text-slate-400'}">Round ${state.js.currentRound + 1}</button><button onclick="setJSView('standings')" class="flex-1 py-3 rounded-xl font-bold transition-all ${state.js.currentView==='standings' ? 'bg-app-js text-black shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-app-surface border border-white/10 text-slate-400'}">Standings</button>`;
     if (state.js.currentView === 'standings') {
-        let sorted = [...state.js.players].sort((a,b) => b.points - a.points);
+        let sorted = [...state.js.players].sort((a,b) => {
+            if (b.points !== a.points) return b.points - a.points;
+            let aDefeatedB = a.defeated && a.defeated.includes(b.name);
+            let bDefeatedA = b.defeated && b.defeated.includes(a.name);
+            if (aDefeatedB) return -1;
+            if (bDefeatedA) return 1;
+            return 0;
+        });
         mCont.innerHTML = sorted.map((p, i) => `<div class="flex justify-between items-center bg-app-surface p-4 rounded-xl border border-white/5 mb-2"><div class="flex items-center gap-3"><span class="font-black text-xl ${i===0 ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-500'}">#${i+1}</span><span class="font-bold text-white">${esc(p.name)}</span></div><span class="font-black text-app-js">${p.points} PTS</span></div>`).join(''); return;
     }
     let currentMatches = state.js.rounds[state.js.currentRound]; let allFinished = true;
@@ -126,16 +134,64 @@ function renderJSSwiss() {
 function openJSMatchModal(r, mIdx) { const match = state.js.rounds[r][mIdx]; const content = document.getElementById('js-modal-content'); if (!match.ready1 || !match.ready2) { content.innerHTML = `<h3 class="font-black text-2xl text-white tracking-widest uppercase mb-1 drop-shadow-md">Draft Phase</h3><p class="text-sm text-slate-300 mb-6">Grab 2 new packs and shuffle!<br>Both players must confirm.</p><div class="flex flex-col gap-4"><button onclick="toggleJSReady(${r}, ${mIdx}, 1)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready1 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p1)}</span><span class="material-symbols-outlined">${match.ready1 ? 'check_circle' : 'hourglass_empty'}</span></button><button onclick="toggleJSReady(${r}, ${mIdx}, 2)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready2 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p2)}</span><span class="material-symbols-outlined">${match.ready2 ? 'check_circle' : 'hourglass_empty'}</span></button></div>`; } else { content.innerHTML = `<h3 class="font-black text-2xl text-red-500 tracking-widest uppercase mb-1 drop-shadow-md animate-pulse">Declare Winner</h3><p class="text-sm text-slate-300 mb-6">Who survived the combat?</p><div class="flex gap-3"><button onclick="setJSWinner(${r}, ${mIdx}, '${esc(match.p1)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p1)}</span></button><button onclick="setJSWinner(${r}, ${mIdx}, '${esc(match.p2)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p2)}</span></button></div>`; } document.getElementById('js-match-modal').classList.remove('hidden'); }
 function toggleJSReady(r, mI, pN) { if(pN===1) state.js.rounds[r][mI].ready1 = !state.js.rounds[r][mI].ready1; else state.js.rounds[r][mI].ready2 = !state.js.rounds[r][mI].ready2; saveData(); openJSMatchModal(r, mI); renderJSSwiss(); }
 function closeJSModal() { document.getElementById('js-match-modal').classList.add('hidden'); }
-function setJSWinner(r, m, winnerName) { const match = state.js.rounds[r][m]; match.winner = winnerName; let p1 = state.js.players.find(p => p.name === match.p1); let p2 = state.js.players.find(p => p.name === match.p2); p1.played.push(p2.name); p2.played.push(p1.name); let w = state.js.players.find(p => p.name === winnerName); w.points += 3; saveData(); closeJSModal(); renderJSSwiss(); }
-function revertJSSwissWinner() { let matches = state.js.rounds[state.js.currentRound]; let lastMatch = [...matches].reverse().find(m => m.winner !== null); if (!lastMatch) return mfModal.show("Hold Up", "No matches to undo.", "warning"); let w = state.js.players.find(p => p.name === lastMatch.winner); w.points -= 3; let p1 = state.js.players.find(p => p.name === lastMatch.p1); let p2 = state.js.players.find(p => p.name === lastMatch.p2); p1.played.pop(); p2.played.pop(); lastMatch.winner = null; saveData(); renderJSSwiss(); }
-function finishSwiss() { let sorted = [...state.js.players].sort((a,b) => b.points - a.points); showJSUltimateWinner(sorted); }
+
+function setJSWinner(r, m, winnerName) { 
+    const match = state.js.rounds[r][m]; 
+    match.winner = winnerName; 
+    let p1 = state.js.players.find(p => p.name === match.p1); 
+    let p2 = state.js.players.find(p => p.name === match.p2); 
+    p1.played.push(p2.name); 
+    p2.played.push(p1.name); 
+    
+    // FIX: Guardamos el nombre del perdedor en el array del ganador para Head-to-Head
+    let w = state.js.players.find(p => p.name === winnerName); 
+    let loserName = match.p1 === winnerName ? match.p2 : match.p1;
+    if(!w.defeated) w.defeated = [];
+    w.defeated.push(loserName);
+    w.points += 3; 
+    saveData(); closeJSModal(); renderJSSwiss(); 
+}
+
+function revertJSSwissWinner() { 
+    let matches = state.js.rounds[state.js.currentRound]; 
+    let lastMatch = [...matches].reverse().find(m => m.winner !== null); 
+    if (!lastMatch) return mfModal.show("Hold Up", "No matches to undo.", "warning"); 
+    let w = state.js.players.find(p => p.name === lastMatch.winner); 
+    w.points -= 3; 
+    
+    // FIX: Removemos al oponente de la lista de derrotados al hacer Undo
+    let loserName = lastMatch.p1 === lastMatch.winner ? lastMatch.p2 : lastMatch.p1;
+    if(w.defeated) {
+        let idx = w.defeated.indexOf(loserName);
+        if(idx > -1) w.defeated.splice(idx, 1);
+    }
+    
+    let p1 = state.js.players.find(p => p.name === lastMatch.p1); 
+    let p2 = state.js.players.find(p => p.name === lastMatch.p2); 
+    p1.played.pop(); p2.played.pop(); 
+    lastMatch.winner = null; 
+    saveData(); renderJSSwiss(); 
+}
+
+function finishSwiss() { 
+    // FIX: Nuevo Motor de Desempate (Points > Head-to-Head)
+    let sorted = [...state.js.players].sort((a,b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        let aDefeatedB = a.defeated && a.defeated.includes(b.name);
+        let bDefeatedA = b.defeated && b.defeated.includes(a.name);
+        if (aDefeatedB) return -1;
+        if (bDefeatedA) return 1;
+        return 0;
+    });
+    showJSUltimateWinner(sorted); 
+}
+
 function showJSUltimateWinner(sortedPlayers) {
     playTransition(GIFS.WINNER, 3200, () => {
         state.matchFinished=true; let w = sortedPlayers[0].name;
         triggerConfetti(null);
         let podiumLog = sortedPlayers.slice(0,3).map(p=>p.name);
         
-        // FIX: Forzamos crear el historial si está vacío y aplicamos un guardado síncrono duro
         if (!state.history) state.history = [];
         state.history.unshift({ date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), pairings:[], winner:w, mode:'Jumpstart', podium: podiumLog });
         try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } catch(e) {}

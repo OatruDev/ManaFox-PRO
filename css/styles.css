@@ -6,7 +6,6 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 .screen.active { display: block; opacity: 1; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
-/* FIX BROWSER UI: 100svh en lugar de 100vh */
 .bf-grid { display: grid; width: 100vw; height: 100svh; gap: 4px; background: #000; }
 
 .mana-btn { transition: all 0.2s; border: 2px solid transparent; }
@@ -22,11 +21,12 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 .bf-3p { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; }
 .bf-3p-top { grid-column: span 2; }
 .bf-4p-grid { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; }
-.bf-4p-cross { grid-template-rows: 25svh 50svh 25svh; grid-template-columns: 25vw 50vw 25vw; }
-.cross-pos-0 { grid-area: 1 / 1 / 2 / 4; }
+/* FIX: Layout Cross optimizado sin agujero central */
+.bf-4p-cross { grid-template-rows: 30svh 40svh 30svh; grid-template-columns: 1fr 1fr; }
+.cross-pos-0 { grid-area: 1 / 1 / 2 / 3; }
 .cross-pos-1 { grid-area: 2 / 1 / 3 / 2; }
-.cross-pos-2 { grid-area: 2 / 3 / 3 / 4; }
-.cross-pos-3 { grid-area: 3 / 1 / 4 / 4; }
+.cross-pos-2 { grid-area: 2 / 2 / 3 / 3; }
+.cross-pos-3 { grid-area: 3 / 1 / 4 / 3; }
 .bf-5p { grid-template-rows: 1fr 1fr; grid-template-columns: repeat(6, 1fr); }
 .bf-5p > div:nth-child(1), .bf-5p > div:nth-child(2) { grid-column: span 3; }
 .bf-5p > div:nth-child(3), .bf-5p > div:nth-child(4), .bf-5p > div:nth-child(5) { grid-column: span 2; }

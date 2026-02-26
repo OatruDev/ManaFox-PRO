@@ -62,7 +62,7 @@ function buildDeckDOM() {
                     <button onclick="removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button>
                 </div>
             </div>
-            <input type="text" maxlength="40" oninput="state.deckData[${i}].name=this.value; saveData();" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white" value="${esc(d.name)}" placeholder="Name">
+            <input type="text" id="deck-input-${i}" maxlength="40" oninput="state.deckData[${i}].name=this.value; saveData();" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white" value="${esc(d.name)}" placeholder="Name">
             <div class="flex gap-2">${colorsHTML}</div>
         </div>`; 
     }); 
@@ -73,7 +73,28 @@ function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors
 function removeDeck(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
 function addExtraDeck() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
 
+// FIX: Función que auto-nombra y sincroniza los mazos a la librería global
+function syncDecksToLibrary() { 
+    let allE = [...baseDecks, ...state.savedDecks]; 
+    let nw = false; 
+    state.deckData.forEach((d, i) => { 
+        if (d.name.trim() === "") {
+            d.name = `Deck ${i + 1}`;
+            const inputNode = document.getElementById(`deck-input-${i}`);
+            if(inputNode) inputNode.value = d.name;
+        }
+        let isUnique = !allE.some(ex => ex.name.toLowerCase() === d.name.trim().toLowerCase());
+        if (isUnique) { 
+            state.savedDecks.push({ name: esc(d.name.trim()), colors: [...d.colors] }); 
+            allE.push({ name: esc(d.name.trim()), colors: [...d.colors] });
+            nw = true; 
+        } 
+    }); 
+    if (nw) saveData(); 
+}
+
 function openLibraryManager() { 
+    syncDecksToLibrary(); // Sincronizamos antes de abrir para mostrar lo nuevo
     const modal = document.getElementById('library-modal');
     if (!document.getElementById('library-list')) {
         modal.innerHTML = `
@@ -236,8 +257,15 @@ function renderBattlefield() {
     const grid = document.getElementById('battlefield-grid'); const count = state.currentMatch.length; 
     grid.className = 'bf-grid'; 
     if (count === 2) grid.classList.add('bf-2p'); else if (count === 3) grid.classList.add('bf-3p'); else if (count === 4) grid.classList.add('bf-4p-grid'); else if (count === 5) grid.classList.add('bf-5p'); else grid.classList.add('bf-6p'); 
-    if (count === 4 && state.layoutMode === 'cross') grid.classList.replace('bf-4p-grid', 'bf-4p-cross'); 
-    if (count === 4) document.getElementById('layout-toggle-btn').classList.remove('hidden'); 
+    
+    let layoutBtn = document.getElementById('layout-toggle-btn');
+    if (count === 4) {
+        if (layoutBtn) layoutBtn.classList.remove('hidden');
+        if (state.layoutMode === 'cross') grid.classList.replace('bf-4p-grid', 'bf-4p-cross'); 
+    } else {
+        if (layoutBtn) layoutBtn.classList.add('hidden');
+    }
+    
     grid.innerHTML = ''; 
     state.currentMatch.forEach((p, i) => { 
         let rotDeg = 0; let pos = ''; 
@@ -273,23 +301,18 @@ function renderCmdrDamageIcons(player) {
     } 
     return html; 
 }
-function toggleLayout() { state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; renderBattlefield(); toggleCenterMenu(); saveData(); }
+
+// FIX: Modificado para invocar al Modal Central
+function toggleLayout() { 
+    state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; 
+    renderBattlefield(); 
+    toggleCenterMenu(); 
+    saveData(); 
+}
 
 let currentCmdrTarget = -1;
 function openCmdrModal(idx, rotDeg) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button onclick="changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button onclick="changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>` : '').join(''); const box = document.getElementById('cmdr-modal-box'); box.style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
-
-function changeCmdrDmg(tI, aI, v) { 
-    let t = state.currentMatch[tI]; 
-    let oldVal = t.cmdrDmg[aI] || 0; 
-    let newVal = Math.max(0, oldVal + v); 
-    t.cmdrDmg[aI] = newVal; 
-    t.life -= (newVal - oldVal); 
-    saveData(); 
-    openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); 
-    renderBattlefield(); 
-    setTimeout(() => checkEliminations(), 20); 
-}
-
+function changeCmdrDmg(tI, aI, v) { let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 20); }
 function closeCmdrModal() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
 let isCheckingDeath = false;
@@ -300,9 +323,7 @@ async function checkEliminations() {
         let p = state.currentMatch[i]; 
         if (!p.isDead) { 
             let cmdrDeath = false; 
-            if (p.cmdrDmg) { 
-                cmdrDeath = Object.values(p.cmdrDmg).some(d => d >= 21); 
-            } 
+            if (p.cmdrDmg) { cmdrDeath = Object.values(p.cmdrDmg).some(d => d >= 21); } 
             if (p.life <= 0 || cmdrDeath) { 
                 let reason = cmdrDeath ? "21 Commander Damage (Single Source)" : "0 Life"; 
                 let isEliminated = await mfModal.show("Confirm Elimination", `${esc(p.player)} reached ${reason}.`, "skull", "confirm"); 
@@ -311,28 +332,29 @@ async function checkEliminations() {
                     p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)]; 
                     if (currentCmdrTarget === i) closeCmdrModal(); 
                 } else { 
-                    if (cmdrDeath) { 
-                        for (let k in p.cmdrDmg) if (p.cmdrDmg[k] >= 21) p.cmdrDmg[k] = 20; 
-                    } else if (p.life <= 0) { p.life = 1; } 
+                    if (cmdrDeath) { for (let k in p.cmdrDmg) if (p.cmdrDmg[k] >= 21) p.cmdrDmg[k] = 20; } else if (p.life <= 0) { p.life = 1; } 
                 } 
-                saveData(); 
-                renderBattlefield(); 
+                saveData(); renderBattlefield(); 
             } 
         } 
     } 
     let alive = state.currentMatch.filter(p => !p.isDead); 
-    if (alive.length === 1 && state.currentMatch.length > 1) { 
-        setTimeout(() => { showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1200); 
-    } 
+    if (alive.length === 1 && state.currentMatch.length > 1) { setTimeout(() => { showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1200); } 
     isCheckingDeath = false; 
 }
 
-let menuOpen = false;
-function toggleCenterMenu() { menuOpen = !menuOpen; const opts = document.getElementById('center-menu-options'); const btn = document.getElementById('center-menu-btn'); if (menuOpen) { opts.classList.remove('opacity-0', 'pointer-events-none'); opts.classList.add('pointer-events-auto'); btn.innerHTML = '<span class="material-symbols-outlined text-3xl">close</span>'; } else { opts.classList.add('opacity-0', 'pointer-events-none'); opts.classList.remove('pointer-events-auto'); btn.innerHTML = '<span class="material-symbols-outlined text-3xl text-white">apps</span>'; } }
+// FIX: Función que invoca el nuevo Modal de Cristal en vez del antiguo menú radial
+function toggleCenterMenu() { 
+    const m = document.getElementById('match-menu-modal');
+    if (m) {
+        if(m.classList.contains('hidden')) { m.classList.remove('hidden'); m.classList.add('flex'); }
+        else { m.classList.add('hidden'); m.classList.remove('flex'); }
+    }
+}
+
 async function resetLife() { toggleCenterMenu(); const confirmReset = await mfModal.show("Reset Match", "All players will go back to 40 life.", "refresh", "confirm"); if (confirmReset) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); saveData(); renderBattlefield(); } }
 function toggleFullScreen() { toggleCenterMenu(); if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { console.warn("Fullscreen error"); }); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
 function rollD20All() { toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let final = {}; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if (r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); state.currentMatch.forEach((p, i) => { if (!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
-
 function endMatchManual() { toggleCenterMenu(); goToScreen6Manual(); }
 function goToScreen6Manual() { state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-black text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
 
@@ -399,10 +421,8 @@ window.startOver = startOver;
 export function handleCommanderNext() {
     if (state.step === 1) goToDecks(); 
     else if (state.step === 2) { 
-        if (!state.deckData.some(d => d.name.trim() !== "")) return; 
-        let allE = [...baseDecks, ...state.savedDecks]; let nw = false; 
-        state.deckData.forEach(d => { if (d.name.trim() !== "" && !allE.some(ex => ex.name.toLowerCase() === d.name.trim().toLowerCase())) { state.savedDecks.push({ name: esc(d.name.trim()), colors: [...d.colors] }); nw = true; } }); 
-        if (nw) saveData(); goToPlayers(); 
+        syncDecksToLibrary(); // FIX: Sincroniza y renombra los mazos vacíos antes de pasar a la pantalla de Jugadores
+        goToPlayers(); 
     } 
     else if (state.step === 3) { 
         if (state.deckData.filter(d => d.name.trim() !== "").length < state.players) return mfModal.show("Warning", `Need more physical decks!`, "warning"); 
