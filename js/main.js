@@ -51,7 +51,7 @@ function setupGlobalListeners() {
     const creditsBtn = document.getElementById('btn-show-credits');
     if (creditsBtn) {
         creditsBtn.addEventListener('click', async () => {
-            let msg = "Versión: v1.3 Modular (Offline PWA)\n\n- Arquitectura: ES Modules.\n- Nuevo Motor Veto (Bans/Locks) activado.\n- Renderizado DOM Dinámico.";
+            let msg = "Versión: v1.3 Modular (Offline PWA)\n\n- Arquitectura: ES Modules.\n- Nuevo Motor Veto (Bans/Locks) activado.\n- Transiciones SPA Instantáneas.";
             let customHtml = `
                 <div class="flex flex-col w-full">
                     <button id="btn-hard-reset" class="w-full mb-2 bg-red-900/20 border border-red-500/30 text-red-400 py-3 rounded-xl font-bold hover:bg-red-500 hover:text-white transition active:scale-95 text-xs flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[14px]">delete_forever</span> Borrar Memoria y Reiniciar App</button>
@@ -103,11 +103,21 @@ function renderAndOpenModeHub() {
 function changeMode(newMode) {
     state.gameMode = newMode;
     state.step = newMode === 'commander' ? 1 : 7;
-    saveData();
+    
+    // 🛡️ FIX: Forzamos el guardado síncrono al instante para evitar el lag de 150ms
+    try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } catch(e) {}
+    
     applyThemeColors();
     document.getElementById('mode-modal').classList.add('hidden');
     document.getElementById('mode-modal').classList.remove('flex');
-    window.location.reload(); // Reinicia limpio
+    
+    // 🚀 FIX: Transición SPA instantánea en lugar de recargar la página
+    switchScreen(state.step);
+    if (newMode === 'commander') {
+        initCommander();
+    } else {
+        showWIPScreen();
+    }
 }
 
 function showWIPScreen() {
