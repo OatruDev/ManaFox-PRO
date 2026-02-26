@@ -1,11 +1,11 @@
+// /js/main.js
 import { state, loadLocalState, saveData, resetLocalState } from './state.js';
 import { preloadGifs } from './utils.js';
 import { mfModal, applyThemeColors, switchScreen } from './ui.js';
 
-// Importamos los 3 módulos completos
 import { initCommander, handleCommanderNext, goBackCommander } from './modules/commander.js';
 import { initJumpstart, handleJumpstartNext, goBackJumpstart } from './modules/jumpstart.js';
-import './modules/market.js'; // El market se inicializa solo al tocar el botón
+import './modules/market.js';
 
 document.addEventListener("DOMContentLoaded", () => { 
     preloadGifs();
@@ -13,12 +13,12 @@ document.addEventListener("DOMContentLoaded", () => {
     applyThemeColors();
     setupGlobalListeners();
     
-    // Arranque inicial basado en el modo
     if (state.gameMode === 'commander') {
         initCommander();
     } else {
         initJumpstart();
     }
+    switchScreen(state.step || (state.gameMode === 'commander' ? 1 : 7));
 });
 
 function setupGlobalListeners() {
@@ -94,6 +94,7 @@ function renderAndOpenModeHub() {
 }
 
 function changeMode(newMode) {
+    // ESTO ESTABA BORRADO EN TU CÓDIGO. Es vital.
     state.gameMode = newMode;
     state.step = newMode === 'commander' ? 1 : 7;
     try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } catch(e) {}

@@ -38,8 +38,9 @@ export function playTransition(gifUrl, duration, callback) {
         gif.src = gifUrl; 
         overlay.classList.remove('opacity-0', 'pointer-events-none');
         setTimeout(() => { 
-            callback(); 
-            setTimeout(() => { overlay.classList.add('opacity-0', 'pointer-events-none'); }, 800); 
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+            // FIX: Esperamos 350ms exactos a que termine el fade-out de CSS para soltar el confeti
+            setTimeout(() => { callback(); }, 350); 
         }, duration);
     });
 }
@@ -55,6 +56,7 @@ export function applyThemeColors() {
         logo.className = 'size-8 flex items-center justify-center text-app-primary group-hover:text-white transition-colors'; 
         title.className = 'text-app-primary transition-colors'; 
     } 
+    updateActionBar(); 
 }
 
 export function switchScreen(s) { 

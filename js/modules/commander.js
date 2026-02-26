@@ -260,7 +260,8 @@ function endMatchManual() { toggleCenterMenu(); goToScreen6Manual(); }
 function goToScreen6Manual() { state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-black text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
 
 function showUltimateWinner(idx) { 
-    playTransition(GIFS.WINNER, 2700, () => { 
+    // FIX: Incrementado el tiempo para que el GIF tenga tiempo de sobra y sincronice perfecto
+    playTransition(GIFS.WINNER, 3200, () => { 
         state.matchFinished = true; const w = state.currentMatch[idx]; const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
         triggerConfetti(w.deck ? w.deck.colors : []);
         state.history.unshift({ date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), pairings: state.currentMatch, winner: w.player, mode: 'Commander' }); 
@@ -270,11 +271,20 @@ function showUltimateWinner(idx) {
     }); 
 }
 
-function startOver() { state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; saveData(); switchScreen(1); }
+function startOver() { 
+    state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; 
+    state.step = state.gameMode === 'commander' ? 1 : 7;
+    saveData(); 
+    switchScreen(state.step); 
+    // FIX: Forzamos renderizar el historial si volvemos a Commander
+    if(state.gameMode === 'commander') renderHistory();
+}
 
 function renderHistory() { 
     const c = document.getElementById('history-container'); 
+    if(!c) return;
     if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); 
+    else document.getElementById('history-section').classList.add('hidden');
     c.innerHTML = state.history.slice(0, 5).map((m, i) => `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button onclick="deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 opacity-100 transition-all"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex justify-between mb-2 text-slate-500 uppercase font-bold tracking-tighter pr-8"><span>${m.date}</span><span class="text-yellow-400">🏆 ${esc(m.winner)} <span class="text-[8px] text-slate-600 ml-1">(${m.mode || 'Commander'})</span></span></div>${(m.mode === 'Jumpstart' && m.podium) ? `<div class="mt-2 text-[9px] text-slate-400 border-t border-white/5 pt-1">Podium: 🥇${esc(m.podium[0])} 🥈${esc(m.podium[1] || '--')} 🥉${esc(m.podium[2] || '--')}</div>` : (m.pairings ? m.pairings.map(p => `<div class="flex justify-between py-0.5"><span class="text-slate-300">${esc(p.player)}</span><span class="text-slate-400 font-medium">${p.deck ? esc(p.deck.name) : ''}</span></div>`).join('') : '')}</div>`).join(''); 
 }
 async function deleteHistoryEntry(idx) { const isConfirmed = await mfModal.show("Delete Match?", "This action will remove the match from the history.", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }

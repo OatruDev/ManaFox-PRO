@@ -130,12 +130,16 @@ function setJSWinner(r, m, winnerName) { const match = state.js.rounds[r][m]; ma
 function revertJSSwissWinner() { let matches = state.js.rounds[state.js.currentRound]; let lastMatch = [...matches].reverse().find(m => m.winner !== null); if (!lastMatch) return mfModal.show("Hold Up", "No matches to undo.", "warning"); let w = state.js.players.find(p => p.name === lastMatch.winner); w.points -= 3; let p1 = state.js.players.find(p => p.name === lastMatch.p1); let p2 = state.js.players.find(p => p.name === lastMatch.p2); p1.played.pop(); p2.played.pop(); lastMatch.winner = null; saveData(); renderJSSwiss(); }
 function finishSwiss() { let sorted = [...state.js.players].sort((a,b) => b.points - a.points); showJSUltimateWinner(sorted); }
 function showJSUltimateWinner(sortedPlayers) {
-    playTransition(GIFS.WINNER, 2700, () => {
+    playTransition(GIFS.WINNER, 3200, () => {
         state.matchFinished=true; let w = sortedPlayers[0].name;
         triggerConfetti(null);
         let podiumLog = sortedPlayers.slice(0,3).map(p=>p.name);
+        
+        // FIX: Forzamos crear el historial si está vacío y aplicamos un guardado síncrono duro
+        if (!state.history) state.history = [];
         state.history.unshift({ date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), pairings:[], winner:w, mode:'Jumpstart', podium: podiumLog });
-        saveData();
+        try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } catch(e) {}
+        
         let rankingsHTML = sortedPlayers.map((p,i) => {
             let medal = i===0 ? '🏆' : (i===1 ? '🥈' : (i===2 ? '🥉' : ''));
             let color = i===0 ? 'text-yellow-400' : (i===1 ? 'text-slate-300' : (i===2 ? 'text-amber-600' : 'text-slate-500'));
