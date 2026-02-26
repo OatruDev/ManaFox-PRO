@@ -1,12 +1,11 @@
-// /js/main.js
 import { state, loadLocalState, saveData, resetLocalState } from './state.js';
 import { preloadGifs } from './utils.js';
 import { mfModal, applyThemeColors, switchScreen } from './ui.js';
 
-// Importamos el módulo de Commander (Fase 3)
+// Importamos los 3 módulos completos
 import { initCommander, handleCommanderNext, goBackCommander } from './modules/commander.js';
-// import { initJumpstart, handleJumpstartNext, goBackJumpstart } from './modules/jumpstart.js';
-// import { initMarket } from './modules/market.js';
+import { initJumpstart, handleJumpstartNext, goBackJumpstart } from './modules/jumpstart.js';
+import './modules/market.js'; // El market se inicializa solo al tocar el botón
 
 document.addEventListener("DOMContentLoaded", () => { 
     preloadGifs();
@@ -18,23 +17,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.gameMode === 'commander') {
         initCommander();
     } else {
-        // Fallback temporal para Jumpstart (hasta Fase 4)
-        switchScreen(state.step || 7);
-        showWIPScreen();
+        initJumpstart();
     }
 });
 
 function setupGlobalListeners() {
-    // Escuchar botón de "Next Step"
     const mainBtn = document.getElementById('main-btn');
     if (mainBtn) {
         mainBtn.addEventListener('click', () => {
             if(state.gameMode === 'commander') handleCommanderNext();
-            // else handleJumpstartNext();
+            else handleJumpstartNext();
         });
     }
 
-    // Escuchar botón del Menú Superior Izquierdo (Modos/Atrás)
     const headerBtn = document.getElementById('btn-header-action');
     if (headerBtn) {
         headerBtn.addEventListener('click', () => {
@@ -42,12 +37,11 @@ function setupGlobalListeners() {
                 renderAndOpenModeHub();
             } else {
                 if(state.gameMode === 'commander') goBackCommander();
-                // else goBackJumpstart();
+                else goBackJumpstart();
             }
         });
     }
 
-    // Escuchar botón de Créditos/Reset
     const creditsBtn = document.getElementById('btn-show-credits');
     if (creditsBtn) {
         creditsBtn.addEventListener('click', async () => {
@@ -67,7 +61,6 @@ function setupGlobalListeners() {
     }
 }
 
-// Renderizado Dinámico del Menú de Modos
 function renderAndOpenModeHub() {
     const modal = document.getElementById('mode-modal');
     modal.innerHTML = `
@@ -92,7 +85,7 @@ function renderAndOpenModeHub() {
     
     document.getElementById('btn-mode-cmd').addEventListener('click', () => changeMode('commander'));
     document.getElementById('btn-mode-js').addEventListener('click', () => changeMode('jumpstart'));
-    document.getElementById('btn-mode-mkt').addEventListener('click', () => { console.log("Market pending Fase 4"); });
+    document.getElementById('btn-mode-mkt').addEventListener('click', () => { window.openMarketHub(); });
     document.getElementById('btn-close-hub').addEventListener('click', () => {
         modal.classList.add('hidden'); modal.classList.remove('flex');
     });
@@ -103,32 +96,13 @@ function renderAndOpenModeHub() {
 function changeMode(newMode) {
     state.gameMode = newMode;
     state.step = newMode === 'commander' ? 1 : 7;
-    
-    // 🛡️ FIX: Forzamos el guardado síncrono al instante para evitar el lag de 150ms
     try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } catch(e) {}
     
     applyThemeColors();
     document.getElementById('mode-modal').classList.add('hidden');
     document.getElementById('mode-modal').classList.remove('flex');
     
-    // 🚀 FIX: Transición SPA instantánea en lugar de recargar la página
     switchScreen(state.step);
-    if (newMode === 'commander') {
-        initCommander();
-    } else {
-        showWIPScreen();
-    }
-}
-
-function showWIPScreen() {
-    const s7 = document.getElementById('screen-7');
-    if(s7 && s7.innerHTML.trim() === '') {
-        s7.innerHTML = `
-            <div class="flex flex-col items-center justify-center h-[60svh] text-center px-4">
-                <span class="material-symbols-outlined text-6xl text-app-js animate-bounce mb-4">construction</span>
-                <h2 class="text-2xl font-black text-white uppercase tracking-widest mb-2">Work In Progress</h2>
-                <p class="text-slate-400 text-sm">Módulos Jumpstart y Market pendientes de Fase 4.</p>
-            </div>
-        `;
-    }
+    if (newMode === 'commander') initCommander();
+    else initJumpstart();
 }
