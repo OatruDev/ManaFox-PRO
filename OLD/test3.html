@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <title>ManaFox: Zorro Corp Edition v4.7.4</title>
+    
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/mana-font@latest/css/mana.min.css" rel="stylesheet" type="text/css" />
+    
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: { 
+                extend: { 
+                    colors: { 
+                        "app-bg": "#09090b",       
+                        "app-surface": "#18181b",  
+                        "app-surface-light": "#27272a", 
+                        "app-primary": "#8b5cf6",  
+                        "app-accent": "#06b6d4"    
+                    },
+                    fontFamily: { "sans": ["Inter", "sans-serif"] } 
+                } 
+            }
+        }
+    </script>
+    
+    <style>
+        body { background-color: #09090b; color: #f4f4f5; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .screen { display: none; opacity: 0; transition: opacity 0.3s ease; } 
+        .screen.active { display: block; opacity: 1; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* Botones de Maná - Paleta DJL Neón */
+        .mana-btn { transition: all 0.2s; border: 2px solid transparent; }
+        .mana-btn.active { border-color: #ffffff; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5); }
+        .mana-w { background-color: #eff51e !important; color: #000000 !important; }
+        .mana-u { background-color: #1e83f5 !important; color: #ffffff !important; }
+        .mana-b { background-color: #901ef5 !important; color: #ffffff !important; border-color: #475569; }
+        .mana-r { background-color: #f5901e !important; color: #ffffff !important; }
+        .mana-g { background-color: #0bef84 !important; color: #000000 !important; }
+        .opacity-30.mana-w, .opacity-30.mana-u, .opacity-30.mana-b, .opacity-30.mana-r, .opacity-30.mana-g {
+            background-color: #27272a !important; color: #71717a !important; border-color: transparent !important;
+        }
+
+        /* Battlefield Layouts */
+        .bf-grid { display: grid; width: 100vw; height: 100vh; gap: 4px; background: #000; }
+        .bf-2p { grid-template-rows: 1fr 1fr; }
+        .bf-3p { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; }
+        .bf-3p-top { grid-column: span 2; }
+        .bf-4p-grid { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; }
+        .bf-4p-cross { grid-template-rows: 25vh 50vh 25vh; grid-template-columns: 25vw 50vw 25vw; }
+        .cross-pos-0 { grid-area: 1 / 1 / 2 / 4; }
+        .cross-pos-1 { grid-area: 2 / 1 / 3 / 2; }
+        .cross-pos-2 { grid-area: 2 / 3 / 3 / 4; }
+        .cross-pos-3 { grid-area: 3 / 1 / 4 / 4; }
+        .bf-5p { grid-template-rows: 1fr 1fr; grid-template-columns: repeat(6, 1fr); }
+        .bf-5p > div:nth-child(1), .bf-5p > div:nth-child(2) { grid-column: span 3; }
+        .bf-5p > div:nth-child(3), .bf-5p > div:nth-child(4), .bf-5p > div:nth-child(5) { grid-column: span 2; }
+        .bf-6p { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr 1fr; }
+
+        .life-btn:active { background: rgba(255,255,255,0.15); }
+        
+        /* SIMULADOR DE FLUIDOS CAÓTICOS */
+        .liquid-bg {
+            background-color: #050505;
+            background-image: 
+                radial-gradient(circle at 20% 30%, var(--c1) 0%, transparent 80%),
+                radial-gradient(circle at 80% 20%, var(--c2) 0%, transparent 80%),
+                radial-gradient(circle at 80% 80%, var(--c3) 0%, transparent 80%),
+                radial-gradient(circle at 20% 80%, var(--c4) 0%, transparent 80%);
+            background-size: 150% 150%;
+            animation: fluidChaos 10s ease-in-out infinite alternate;
+        }
+
+        @keyframes fluidChaos {
+            0% { background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%; }
+            33% { background-position: 100% 100%, 0% 0%, 0% 100%, 100% 0%; }
+            66% { background-position: 0% 100%, 100% 100%, 100% 0%, 0% 0%; }
+            100% { background-position: 100% 0%, 0% 100%, 0% 0%, 100% 100%; }
+        }
+
+        .bg-texture::after { 
+            content: ""; position: absolute; inset: 0; opacity: 0.2; mix-blend-mode: overlay; pointer-events: none; 
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"); 
+            z-index: 1; 
+        }
+        .dead-player-layer { filter: grayscale(1); animation: none !important; }
+        @keyframes errorShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 50% { transform: translateX(6px); } 75% { transform: translateX(-6px); } }
+        .animate-error-shake { animation: errorShake 0.4s ease-in-out; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col pb-24">
+
+    <div id="transition-overlay" class="fixed inset-0 z-[100000] bg-black flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-500">
+        <img id="transition-gif" src="" class="w-full h-full object-cover opacity-80 mix-blend-screen saturate-150" />
+    </div>
+
+    <div id="mf-modal" class="fixed inset-0 flex flex-col items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none scale-95" style="z-index: 99999; background-color: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+        <div id="mf-modal-content" class="bg-app-surface border border-app-primary/50 rounded-3xl p-6 w-full max-w-xs shadow-[0_0_40px_rgba(139,92,246,0.3)] text-center">
+            <span id="mf-modal-icon" class="material-symbols-outlined text-6xl mb-4 text-app-accent drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]">info</span>
+            <h3 id="mf-modal-title" class="font-black text-xl text-white mb-2 tracking-widest uppercase"></h3>
+            <p id="mf-modal-msg" class="text-slate-300 text-sm mb-8 whitespace-pre-line"></p>
+            <div id="mf-modal-btns" class="flex gap-4 justify-center"></div>
+        </div>
+    </div>
+
+    <div id="library-modal" class="fixed inset-0 z-[80] bg-black/90 hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col max-h-[85vh]">
+            <h3 class="font-black text-xl mb-2 text-center text-white tracking-widest uppercase flex-none">Library Manager</h3>
+            <p class="text-[10px] text-slate-400 text-center uppercase tracking-wider mb-6 flex-none">Base decks cannot be deleted.</p>
+            <div id="library-list" class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-4"></div>
+            <button onclick="closeLibraryManager()" class="w-full mt-4 bg-app-surface-light text-white hover:bg-white/10 transition py-4 rounded-xl font-bold uppercase tracking-widest border border-white/5 flex-none shadow-lg active:scale-95">Done</button>
+        </div>
+    </div>
+
+    <header id="main-header" class="flex-none px-4 pt-10 pb-4 flex items-center justify-between sticky top-0 bg-app-bg/95 backdrop-blur-md z-50 border-b border-white/5 transition-transform">
+        <button onclick="handleHeaderAction()" class="size-10 flex-none flex items-center justify-center rounded-full hover:bg-white/10 transition-all">
+            <div id="header-logo-container" class="size-8 flex items-center justify-center text-app-primary hover:text-white transition-colors">
+                <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-[0_0_12px_var(--app-primary)]">
+                    <polygon points="50,90 15,35 50,15 85,35" fill="currentColor" opacity="0.9"/>
+                    <polygon points="50,90 15,35 10,55" fill="currentColor" opacity="0.6"/>
+                    <polygon points="50,90 85,35 90,55" fill="currentColor" opacity="0.6"/>
+                    <polygon points="15,35 25,5 40,22" fill="currentColor" opacity="0.8"/>
+                    <polygon points="85,35 75,5 60,22" fill="currentColor" opacity="0.8"/>
+                    <polygon points="50,15 35,35 50,55 65,35" fill="currentColor" opacity="0.7"/>
+                    <circle cx="35" cy="45" r="4" fill="#09090b" />
+                    <circle cx="65" cy="45" r="4" fill="#09090b" />
+                </svg>
+            </div>
+            <span id="header-back-icon" class="material-symbols-outlined hidden text-slate-300">arrow_back</span>
+        </button>
+        
+        <div class="flex flex-col items-center flex-1 min-w-0 px-2 overflow-hidden">
+            <h1 id="top-title" class="text-xl font-black tracking-tighter uppercase italic w-full text-center">MANA<span class="text-app-primary">FOX</span></h1>
+            <div id="room-badge" onclick="copyRoomLink()" class="text-[11px] bg-app-primary/20 text-app-primary px-4 py-1 mt-1 rounded-full font-bold cursor-pointer border border-app-primary/30 flex items-center justify-center gap-1.5 w-fit max-w-[90%] hover:bg-app-primary/40 transition-colors">
+                <span class="material-symbols-outlined text-[12px] shrink-0">link</span>
+                <span class="truncate">#<span id="room-id-text">...</span></span>
+            </div>
+        </div>
+
+        <button onclick="showCredits()" class="size-10 flex-none flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/10">
+            <span class="material-symbols-outlined text-[20px]">help</span>
+        </button>
+    </header>
+
+    <main id="screen-1" class="screen active px-4 mt-2">
+        <div class="text-center mb-6"><h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-500 tracking-tight">Battle Setup</h2></div>
+        <div class="mb-6">
+            <h3 class="text-[10px] font-bold text-app-primary tracking-[0.2em] uppercase mb-3 px-1">Presets</h3>
+            <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+                <div onclick="applyDandLPreset()" class="shrink-0 w-40 bg-app-surface border border-white/10 rounded-2xl p-4 cursor-pointer hover:border-app-primary/50 transition relative overflow-hidden shadow-sm">
+                    <div class="absolute top-0 right-0 p-1 bg-app-primary text-white text-[8px] font-bold">TOP</div>
+                    <div class="size-8 bg-app-primary/20 rounded-lg flex items-center justify-center mb-1 text-app-primary font-bold">D&L</div>
+                    <p class="text-[10px] text-slate-400 mt-1">Daniel & Laura • 7 Decks</p>
+                </div>
+                <div onclick="applyDJLPreset()" class="shrink-0 w-40 bg-app-surface border border-white/10 rounded-2xl p-4 cursor-pointer hover:border-[#1e83f5]/50 transition relative overflow-hidden shadow-sm">
+                    <div class="size-8 bg-[#1e83f5]/20 rounded-lg flex items-center justify-center mb-1 text-[#1e83f5] font-bold">DJL</div>
+                    <p class="text-[10px] text-slate-400 mt-1">Daniel, Laura & Julio</p>
+                </div>
+            </div>
+        </div>
+        <div class="space-y-4 mb-8">
+            <div class="bg-app-surface p-5 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg"><div class="flex flex-col"><span class="text-app-primary font-bold text-[10px] uppercase">Players</span><span id="count-players" class="text-4xl font-black">2</span></div><div class="flex gap-2"><button onclick="updateCount('players', -1)" class="size-12 rounded-xl bg-app-surface-light border border-white/5 flex items-center justify-center text-xl hover:bg-white/10 transition">-</button><button onclick="updateCount('players', 1)" class="size-12 rounded-xl bg-app-surface-light border border-white/5 flex items-center justify-center text-xl hover:bg-white/10 transition">+</button></div></div>
+            <div class="bg-app-surface p-5 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg"><div class="flex flex-col"><span class="text-app-primary font-bold text-[10px] uppercase">Library</span><span id="count-decks" class="text-4xl font-black">7</span></div><div class="flex gap-2"><button onclick="updateCount('decks', -1)" class="size-12 rounded-xl bg-app-surface-light border border-white/5 flex items-center justify-center text-xl hover:bg-white/10 transition">-</button><button onclick="updateCount('decks', 1)" class="size-12 rounded-xl bg-app-surface-light border border-white/5 flex items-center justify-center text-xl hover:bg-white/10 transition">+</button></div></div>
+        </div>
+        <div id="history-section" class="hidden"><h3 class="text-[10px] font-bold text-slate-500 tracking-widest uppercase mb-3 px-1">Recent Battles</h3><div id="history-container" class="space-y-3"></div></div>
+    </main>
+
+    <main id="screen-2" class="screen px-4 mt-2">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-3xl font-black">Deck Entry</h2>
+            <button onclick="openLibraryManager()" class="text-app-primary text-[10px] font-bold uppercase tracking-widest bg-app-primary/10 px-3 py-2 rounded-xl border border-app-primary/30 hover:bg-app-primary/20 transition flex items-center gap-1 active:scale-95 shadow-sm">
+                <span class="material-symbols-outlined text-[14px]">library_books</span> Manage
+            </button>
+        </div>
+        <div id="deck-inputs-container" class="space-y-4"></div>
+        <button onclick="addExtraDeck()" class="w-full mt-4 py-4 rounded-xl border-2 border-dashed border-app-primary/30 text-app-primary font-bold flex items-center justify-center gap-2 hover:bg-app-primary/5 transition"><span class="material-symbols-outlined">add</span> Add Deck</button>
+    </main>
+
+    <main id="screen-3" class="screen px-4 mt-2">
+        <h2 class="text-3xl font-black mb-6">Who is playing?</h2>
+        <div id="saved-players-section" class="mb-6 hidden"><p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3">Roster</p><div id="saved-players-container" class="flex gap-4 overflow-x-auto pb-4 pt-2 px-1 no-scrollbar"></div></div>
+        <div id="player-inputs-container" class="space-y-4"></div>
+        <button onclick="addExtraPlayer()" class="w-full mt-6 py-4 rounded-xl border-2 border-dashed border-app-primary/30 text-app-primary font-bold flex items-center justify-center gap-2 transition hover:bg-app-primary/5"><span class="material-symbols-outlined">add</span> Add Player</button>
+    </main>
+
+    <main id="screen-4" class="screen px-4 mt-2 relative">
+        <div class="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
+            <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdWU0ODk2cjFwcTl1dWd4c3U4eWJ2am5zcjgxdmFzeHJkMnVwYXVrbyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l41lZD0i4UU9PkDJe/giphy.gif" alt="Background" class="w-full h-full object-cover blur-[2px] opacity-30 mix-blend-screen saturate-150">
+            <div class="absolute inset-0 bg-app-bg/80 backdrop-blur-[1px]"></div>
+        </div>
+        <div class="text-center mt-6 mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">Battle Pairings</h2></div>
+        
+        <div id="assignments-container" class="space-y-4 mb-8"></div>
+        
+        <div id="rem-section" class="mb-10 hidden">
+            <h4 class="text-[11px] uppercase font-bold text-slate-400 mb-4 px-1">Remaining Decks</h4>
+            <div id="remaining-container" class="grid grid-cols-2 gap-3"></div>
+        </div>
+        
+        <div class="space-y-3 pb-6">
+            <button onclick="reassignDecks()" class="w-full bg-app-surface/90 border border-app-primary/40 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg"><span class="material-symbols-outlined">shuffle</span> Reassign Pairings</button>
+            <button onclick="shareWhatsApp()" class="w-full bg-app-surface/90 border border-white/10 text-app-accent font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition active:scale-95"><span class="material-symbols-outlined">share</span> Share Pairings</button>
+        </div>
+    </main>
+
+    <main id="screen-5" class="screen">
+        <div class="fixed inset-0 z-40 bg-black overflow-hidden pointer-events-auto">
+            <div id="battlefield-grid" class="bf-grid"></div>
+            
+            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 flex items-center justify-center">
+                <button id="center-menu-btn" onclick="toggleCenterMenu()" class="size-16 bg-app-surface border-2 border-white/20 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.8)] flex items-center justify-center text-white font-black text-xl z-50 relative transition-transform active:scale-90"><span class="material-symbols-outlined text-3xl">apps</span></button>
+                <div id="center-menu-options" class="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-200 flex items-center justify-center">
+                    <button onclick="rollD20All()" class="pointer-events-auto absolute -top-20 bg-blue-600 text-white p-3.5 rounded-full shadow-lg transition transform hover:scale-110 flex flex-col items-center"><span class="material-symbols-outlined">casino</span></button>
+                    <button onclick="resetLife()" class="pointer-events-auto absolute -left-20 bg-yellow-600 text-white p-3.5 rounded-full shadow-lg transition transform hover:scale-110 flex flex-col items-center"><span class="material-symbols-outlined">refresh</span></button>
+                    <button onclick="endMatchManual()" class="pointer-events-auto absolute -right-20 bg-red-600 text-white p-3.5 rounded-full shadow-lg transition transform hover:scale-110 flex flex-col items-center"><span class="material-symbols-outlined">flag</span></button>
+                    <button id="layout-toggle-btn" onclick="toggleLayout()" class="pointer-events-auto absolute -bottom-20 bg-purple-600 text-white p-3.5 rounded-full shadow-lg transition transform hover:scale-110 flex flex-col items-center hidden"><span class="material-symbols-outlined">dashboard</span></button>
+                </div>
+            </div>
+
+            <div id="dice-modal" class="absolute inset-0 z-[60] bg-black/95 hidden flex flex-col items-center justify-center p-6 backdrop-blur-md"><h3 class="font-black text-3xl mb-8 text-center text-white tracking-widest uppercase">Rolling D20...</h3><div id="dice-container" class="w-full max-w-sm space-y-4 max-h-[80vh] overflow-y-auto no-scrollbar"></div></div>
+            
+            <div id="cmdr-modal" class="absolute inset-0 z-[60] bg-black/80 hidden flex items-center justify-center p-4 backdrop-blur-sm"><div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col max-h-[90vh]"><h3 class="font-bold text-lg mb-4 text-center text-slate-400 uppercase tracking-widest flex-none">Commander Damage to <br><span id="cmdr-target-name" class="text-white text-2xl font-black"></span></h3><div id="cmdr-options" class="space-y-3 overflow-y-auto no-scrollbar flex-1"></div><button onclick="closeCmdrModal()" class="w-full mt-6 bg-app-surface-light text-white hover:bg-white/10 transition py-4 rounded-xl font-bold uppercase tracking-widest border border-white/5 flex-none">Close</button></div></div>
+        </div>
+    </main>
+
+    <main id="screen-6" class="screen px-4 mt-2 pb-32"><div id="declare-winner-container" class="w-full"></div></main>
+
+    <div id="main-action-bar" class="fixed bottom-0 left-0 w-full px-4 pt-4 pb-6 bg-app-bg/95 backdrop-blur-md z-50 border-t border-white/5">
+        <button id="main-btn" onclick="handleNextStep()" class="w-full max-w-md mx-auto bg-app-primary text-white font-bold py-4 rounded-xl shadow-[0_4px_15px_rgba(139,92,246,0.4)] flex items-center justify-center gap-2 transition-transform active:scale-95">Next Step <span class="material-symbols-outlined">chevron_right</span></button>
+    </div>
+
+    <script>
+        const mfModal = {
+            show: function(title, msg, icon, type = 'alert') {
+                return new Promise((resolve) => {
+                    document.getElementById('mf-modal-title').innerText = title;
+                    document.getElementById('mf-modal-msg').innerText = msg;
+                    document.getElementById('mf-modal-icon').innerText = icon;
+                    
+                    let btns = document.getElementById('mf-modal-btns');
+                    if(type === 'confirm') {
+                        btns.innerHTML = `
+                            <button id="mf-btn-cancel" class="flex-1 bg-app-surface border border-white/10 text-white py-4 rounded-xl font-bold hover:bg-white/10 transition active:scale-95">Cancel</button>
+                            <button id="mf-btn-ok" class="flex-1 bg-app-primary text-white py-4 rounded-xl font-bold hover:bg-app-primary/80 transition shadow-[0_0_15px_rgba(139,92,246,0.5)] active:scale-95">Confirm</button>
+                        `;
+                        document.getElementById('mf-btn-cancel').onclick = () => { mfModal.hide(); resolve(false); };
+                        document.getElementById('mf-btn-ok').onclick = () => { mfModal.hide(); resolve(true); };
+                    } else {
+                        btns.innerHTML = `
+                            <button id="mf-btn-ok" class="w-full bg-app-primary text-white py-4 rounded-xl font-bold hover:bg-app-primary/80 transition shadow-[0_0_15px_rgba(139,92,246,0.5)] active:scale-95">Got it</button>
+                        `;
+                        document.getElementById('mf-btn-ok').onclick = () => { mfModal.hide(); resolve(true); };
+                    }
+                    
+                    const el = document.getElementById('mf-modal');
+                    el.classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+                });
+            },
+            hide: function() {
+                const el = document.getElementById('mf-modal');
+                el.classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+            }
+        };
+
+        // TRANSICIÓN GIF OVERLAY REUTILIZABLE
+        function playTransition(gifUrl, duration, callback) {
+            const overlay = document.getElementById('transition-overlay');
+            const img = document.getElementById('transition-gif');
+            // Cache-busting para forzar que el GIF empiece siempre de 0
+            img.src = gifUrl + "?t=" + new Date().getTime();
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            
+            setTimeout(() => {
+                callback();
+                setTimeout(() => {
+                    overlay.classList.add('opacity-0', 'pointer-events-none');
+                }, 800);
+            }, duration);
+        }
+
+        const baseDecks = [{ name: "Jeskai Striker (Shiko)", colors: ['W', 'R', 'U'] }, { name: "Endless Punishment (Valgavoth)", colors: ['B', 'R'] }, { name: "Eldrazi Incursion (Ulalek)", colors: ['W', 'U', 'B', 'R', 'G'] }, { name: "Dance of Elements (Ashling)", colors: ['W', 'U', 'B', 'R', 'G'] }, { name: "Evangelion (Eva01)", colors: ['W', 'U'] }, { name: "Death Toll (Winter)", colors: ['B', 'G'] }, { name: "Sultai Arisen (Teval)", colors: ['B', 'G', 'U'] }];
+        
+        const winQuotes = ["Your Spark burns brighter than ever! ⚡", "A flawless victory, Planeswalker. 🏆", "Topdecked exactly what you needed. 🃏", "The Multiverse bows to your command. 🌌", "Unstoppable. Uncounterable. Undefeated. 💥", "You played the stack perfectly. 🧠"];
+        const loseQuotes = ["Mana flooded, or just outplayed? 💧", "Countered. Destroyed. Forgotten. 💀", "Your Spark fades into the blind eternities... 🌑", "Sent straight to the graveyard. 🪦", "Exiled from this reality. 🌌", "A tragic misplay seals your fate. 🤦"];
+
+        let state = { 
+            step: 1, players: 2, decks: 7, deckData: [], tempPlayerNames: [], savedPlayers: [], savedDecks: [], history: [], remainingDecks: [],
+            manaColors: [
+                {id:'W',cls:'mana-w',icon:`<i class="ms ms-w text-lg"></i>`},
+                {id:'U',cls:'mana-u',icon:`<i class="ms ms-u text-lg"></i>`},
+                {id:'B',cls:'mana-b',icon:`<i class="ms ms-b text-lg"></i>`},
+                {id:'R',cls:'mana-r',icon:`<i class="ms ms-r text-lg"></i>`},
+                {id:'G',cls:'mana-g',icon:`<i class="ms ms-g text-lg"></i>`}
+            ], 
+            matchFinished: false, startingLife: 40, layoutMode: 'cross' 
+        };
+
+        let lastSyncTime = 0;
+        let roomId = window.location.hash.substring(1) || ('Zorro-' + Math.floor(Math.random() * 100000));
+        window.location.hash = roomId;
+        
+        document.addEventListener("DOMContentLoaded", () => { 
+            switchScreen(1); 
+            document.getElementById('room-id-text').innerText = roomId;
+        });
+        
+        const gun = Gun(['https://gun-manhattan.herokuapp.com/gun']);
+        window.cloudRoom = gun.get('mtg-manafox-v4.6.5').get(roomId);
+        
+        window.cloudRoom.get('sharedData').on((data) => { 
+            if (data) { try { const parsed = JSON.parse(data); if(parsed.ts && parsed.ts < lastSyncTime) return; lastSyncTime = parsed.ts; state.savedPlayers = parsed.p || []; state.savedDecks = parsed.d || []; state.history = parsed.h || []; if(parsed.m && state.step === 5) { state.currentMatch = parsed.m; renderBattlefield(); } if(state.step < 5) renderHistory(); if(state.step === 3) renderSavedPlayers(); } catch(e) {} } 
+        });
+
+        function saveData() { lastSyncTime = Date.now(); window.cloudRoom.get('sharedData').put(JSON.stringify({ ts: lastSyncTime, p: state.savedPlayers, d: state.savedDecks, h: state.history, m: state.currentMatch })); }
+        
+        async function copyRoomLink() { navigator.clipboard.writeText(window.location.href); await mfModal.show('Link Copied', 'Share this link to sync devices in real-time.', 'link'); }
+
+        async function showCredits() { await mfModal.show("ManaFox: Zorro Corp", "Versión: v4.7.4\n\n- UI: Transiciones épicas entre combates.\n- Fix: Sistema de Remaining Decks restaurado.\n- UI: Botón X de Roster más discreto.", "help"); }
+
+        function updateCount(t,v) { state[t] = Math.min(t==='players'?6:20, Math.max(2, state[t]+v)); document.getElementById('count-'+t).innerText = state[t]; }
+        
+        function applyDandLPreset() { state.players = 2; state.decks = 7; state.deckData = baseDecks.map(d=>({...d, colors:[...d.colors]})); state.tempPlayerNames = ["Daniel", "Laura"]; goToDecks(); }
+        function applyDJLPreset() { state.players = 3; state.decks = 7; state.deckData = baseDecks.map(d=>({...d, colors:[...d.colors]})); state.tempPlayerNames = ["Daniel", "Laura", "Julio"]; goToDecks(); }
+        
+        function updateActionBar() {
+            const btn = document.getElementById('main-btn'); 
+            if (!btn) return;
+            if(state.step === 3) btn.innerHTML = '<span class="material-symbols-outlined text-[18px]">style</span> Assign Decks'; 
+            else if(state.step === 4) btn.innerHTML = '<span class="material-symbols-outlined text-[18px]">sports_esports</span> Start Battlefield'; 
+            else btn.innerHTML = 'Next Step <span class="material-symbols-outlined">chevron_right</span>'; 
+        }
+
+        function switchScreen(s) { 
+            document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active')); 
+            document.getElementById('screen-'+s).classList.add('active'); 
+            state.step = s; 
+            
+            const header = document.getElementById('main-header');
+            const bar = document.getElementById('main-action-bar');
+            if(header) header.style.display = s === 5 ? 'none' : 'flex';
+            if(bar) bar.style.display = s < 5 ? 'block' : 'none';
+            
+            const logo = document.getElementById('header-logo-container');
+            const backIcon = document.getElementById('header-back-icon');
+            if(logo) logo.style.display = s === 1 ? 'flex' : 'none';
+            if(backIcon) backIcon.style.display = s === 1 ? 'none' : 'block';
+            
+            updateActionBar(); 
+            window.scrollTo(0,0); 
+        }
+
+        async function handleHeaderAction() { 
+            if(state.step === 1) await mfModal.show("Coming Soon", "🏆 Jumpstart Mode\n🃏 Draft Tool", "construction"); 
+            else goBack(); 
+        }
+        function goBack() { if(state.step===2) switchScreen(1); if(state.step===3) switchScreen(2); if(state.step===4) switchScreen(3); if(state.step===6 && !state.matchFinished) switchScreen(5); }
+        
+        function openLibraryManager() {
+            const list = document.getElementById('library-list');
+            list.innerHTML = '';
+            if(state.savedDecks.length === 0) {
+                list.innerHTML = '<p class="text-center text-slate-500 italic mt-8 font-medium">No custom decks saved yet.</p>';
+            } else {
+                state.savedDecks.forEach((d, i) => {
+                    const mH = d.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px]"></i>`).join(' ');
+                    list.innerHTML += `
+                    <div class="flex items-center justify-between bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm">
+                        <div class="flex flex-col overflow-hidden pr-2">
+                            <span class="font-bold text-sm text-white truncate">${d.name}</span>
+                            <div class="flex gap-1 mt-1 text-slate-400">${mH}</div>
+                        </div>
+                        <button onclick="deleteSavedDeck(${i})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20">
+                            <span class="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                    </div>`;
+                });
+            }
+            document.getElementById('library-modal').classList.remove('hidden');
+        }
+
+        function closeLibraryManager() {
+            document.getElementById('library-modal').classList.add('hidden');
+            buildDeckDOM(); 
+        }
+
+        async function deleteSavedDeck(idx) {
+            const isConfirmed = await mfModal.show("Delete Deck?", `Are you sure you want to permanently delete "${state.savedDecks[idx].name}" from your library?`, "delete", "confirm");
+            if(isConfirmed) {
+                state.savedDecks.splice(idx, 1);
+                saveData();
+                openLibraryManager(); 
+            }
+        }
+
+        async function handleNextStep() { 
+            if(state.step===1) goToDecks(); 
+            else if(state.step===2) { 
+                if(!state.deckData.some(d => d.name.trim() !== "")) return; 
+                
+                let allExisting = [...baseDecks, ...state.savedDecks];
+                let newSaved = false;
+                state.deckData.forEach(d => {
+                    if (d.name.trim() !== "") {
+                        let exists = allExisting.some(ex => ex.name.toLowerCase() === d.name.trim().toLowerCase());
+                        if (!exists) {
+                            state.savedDecks.push({ name: d.name.trim(), colors: [...d.colors] });
+                            newSaved = true;
+                        }
+                    }
+                });
+                if (newSaved) saveData();
+
+                goToPlayers(); 
+            } 
+            else if(state.step===3) { 
+                let validDecks = state.deckData.filter(d => d.name.trim() !== ""); 
+                if (validDecks.length < state.players) {
+                    await mfModal.show("Warning", `Not enough physical decks!\nYou have ${state.players} players but only ${validDecks.length} decks.`, "warning");
+                    return;
+                }
+
+                let newPlayerSaved = false;
+                for(let i=0; i<state.players; i++) {
+                    let pName = document.getElementById('p-in-'+i).value.trim();
+                    if(pName !== "" && !state.savedPlayers.some(p => p.toLowerCase() === pName.toLowerCase())) {
+                        state.savedPlayers.push(pName);
+                        newPlayerSaved = true;
+                    }
+                }
+                if (newPlayerSaved) saveData();
+
+                executeAssignment(); 
+            } else if(state.step===4) { initBattlefield(); } 
+        }
+
+        function buildDeckDOM() { const c = document.getElementById('deck-inputs-container'); c.innerHTML = ''; const lib = [...baseDecks, ...state.savedDecks]; state.deckData.forEach((d,i) => { const colorsHTML = state.manaColors.map(m => `<button onclick="toggleColor(${i},'${m.id}')" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id)?'active':'opacity-30'}">${m.icon}</button>`).join(''); c.innerHTML += `<div class="bg-app-surface p-4 rounded-2xl border border-white/5 shadow-sm"><div class="flex justify-between items-center mb-2"><label class="text-[10px] font-bold text-app-primary uppercase tracking-widest">Deck #${i+1}</label><div class="flex gap-2"><select onchange="loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 font-bold uppercase"><option value="" disabled selected>Library</option>${lib.map((ld,idx)=>`<option value="${idx}">${ld.name}</option>`).join('')}</select><button onclick="removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button></div></div><input type="text" oninput="state.deckData[${i}].name=this.value" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary" value="${d.name}" placeholder="Deck Name"><div class="flex gap-2">${colorsHTML}</div></div>`; }); }
+        function loadDeck(di, li) { const d = [...baseDecks, ...state.savedDecks][li]; state.deckData[di] = {name:d.name, colors:[...d.colors]}; buildDeckDOM(); }
+        function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors.includes(mi) ? d.colors.filter(c=>c!==mi) : [...d.colors, mi]; buildDeckDOM(); }
+        function removeDeck(i) { state.deckData.splice(i,1); state.decks--; buildDeckDOM(); }
+        function addExtraDeck() { state.decks++; state.deckData.push({name:'',colors:[]}); buildDeckDOM(); }
+        function goToDecks() { if(state.deckData.length===0) state.deckData = Array.from({length:state.decks},()=>({name:'', colors:[]})); buildDeckDOM(); switchScreen(2); }
+
+        function goToPlayers() { 
+            const c = document.getElementById('player-inputs-container'); 
+            c.innerHTML = ''; 
+            if(state.savedPlayers.length>0) { 
+                document.getElementById('saved-players-section').classList.remove('hidden'); 
+                renderSavedPlayers(); 
+            } 
+            let validDecks = state.deckData.filter(d => d.name.trim() !== ""); 
+            let deckOptions = `<option value="-1">🎲 Random Deck</option>` + validDecks.map((d, idx) => `<option value="${idx}">${d.name}</option>`).join(''); 
+            for(let i=0; i<state.players; i++) { 
+                const def = state.tempPlayerNames[i] || ""; 
+                c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button onclick="removePlayer(${i})" class="absolute right-3 top-2 text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Player ${i+1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" oninput="state.tempPlayerNames[${i}]=this.value" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary" value="${def}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOptions}</select></div></div></div>`; 
+            } 
+            switchScreen(3); 
+        }
+
+        // X DISCRETA EN EL ROSTER
+        function renderSavedPlayers() { 
+            document.getElementById('saved-players-container').innerHTML = state.savedPlayers.map((p,i)=>`
+            <div class="relative flex flex-col items-center shrink-0 mt-2 group">
+                <button onclick="deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button>
+                <div onclick="quickAdd('${p}')" class="size-12 rounded-full border border-app-primary bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-primary/20 transition-colors">${p[0].toUpperCase()}</div>
+                <span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${p}</span>
+            </div>`).join(''); 
+        }
+
+        function quickAdd(n) { for(let i=0; i<state.players; i++) { const inp = document.getElementById('p-in-'+i); if(inp && !inp.value) { inp.value = n; state.tempPlayerNames[i] = n; break; } } }
+        
+        async function deleteSavedPlayer(i) { 
+            const isConfirmed = await mfModal.show("Remove Player?", `Are you sure you want to remove "${state.savedPlayers[i]}" from your Roster?`, "person_remove", "confirm");
+            if(isConfirmed) { 
+                state.savedPlayers.splice(i,1); 
+                saveData(); 
+                renderSavedPlayers(); 
+                if(state.savedPlayers.length === 0) {
+                    document.getElementById('saved-players-section').classList.add('hidden');
+                }
+            } 
+        }
+
+        function removePlayer(i) { if(state.players <= 1) return; state.tempPlayerNames.splice(i, 1); state.players--; goToPlayers(); }
+        function addExtraPlayer() { state.players++; goToPlayers(); }
+
+        function getPlayerTheme(colors) {
+            const cmap = { 'W': 'rgba(239, 245, 30, 0.9)', 'U': 'rgba(30, 131, 245, 0.9)', 'B': 'rgba(144, 30, 245, 0.9)', 'R': 'rgba(245, 144, 30, 0.9)', 'G': 'rgba(11, 239, 132, 0.9)' };
+            let c1 = 'rgba(71, 85, 105, 0.8)', c2 = 'rgba(51, 65, 85, 0.8)', c3 = 'rgba(30, 41, 59, 0.8)', c4 = 'rgba(15, 23, 42, 0.8)';
+            if (colors && colors.length > 0) {
+                c1 = cmap[colors[0]];
+                if (colors.length === 1) { c2 = cmap[colors[0]]; c3 = 'rgba(0,0,0,0.5)'; c4 = cmap[colors[0]]; } 
+                else if (colors.length === 2) { c2 = cmap[colors[1]]; c3 = cmap[colors[0]]; c4 = cmap[colors[1]]; } 
+                else if (colors.length === 3) { c2 = cmap[colors[1]]; c3 = cmap[colors[2]]; c4 = cmap[colors[0]]; } 
+                else { c2 = cmap[colors[1]]; c3 = cmap[colors[2]]; c4 = cmap[colors[3]]; }
+            }
+            return `--c1: ${c1}; --c2: ${c2}; --c3: ${c3}; --c4: ${c4};`;
+        }
+
+        function executeAssignment() {
+            let validDecks = state.deckData.filter(d => d.name.trim() !== "");
+            state.tempPlayerNames = Array.from({length:state.players}, (_,i)=>document.getElementById('p-in-'+i).value.trim());
+            let pool = validDecks.map((d, index) => ({...d, origIdx: index}));
+            state.currentMatch = []; let lockedPrefs = [];
+            for(let i=0; i<state.players; i++) { let lockEl = document.getElementById(`p-lock-${i}`); let pref = lockEl ? parseInt(lockEl.value) : -1; lockedPrefs.push(pref); if(pref !== -1) { let poolIdx = pool.findIndex(d => d.origIdx === pref); if(poolIdx > -1) pool.splice(poolIdx, 1); } }
+            for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+            for(let i=0; i<state.players; i++) {
+                let player = state.tempPlayerNames[i] || 'P'+(i+1);
+                let assignedDeck = lockedPrefs[i] !== -1 ? validDecks[lockedPrefs[i]] : (pool.shift() || null);
+                let pThemeVars = getPlayerTheme(assignedDeck ? assignedDeck.colors : []);
+                state.currentMatch.push({ player, deck: assignedDeck, life: 40, cmdrDmg: {}, isDead: false, themeVars: pThemeVars, deathQuote: "" });
+            }
+            // ALMACENA LOS MAZOS RESTANTES
+            state.remainingDecks = [...pool];
+            saveData(); buildResultsDOM(); switchScreen(4);
+        }
+
+        function buildResultsDOM() {
+            const c = document.getElementById('assignments-container'); c.innerHTML = '';
+            state.currentMatch.forEach((m, i) => { 
+                const mH = m.deck ? m.deck.colors.map(col => `<div class="size-5 rounded-full flex items-center justify-center mana-btn ${state.manaColors.find(x=>x.id===col).cls} active border border-black/30 shadow-sm">${state.manaColors.find(x=>x.id===col).icon}</div>`).join('') : ''; 
+                c.innerHTML += `<div class="bg-app-surface/90 backdrop-blur-sm p-4 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg transition-colors"><div class="flex items-center gap-4"><div class="size-12 rounded-full bg-app-surface-light border border-white/10 flex items-center justify-center font-bold text-lg text-white">${m.player[0].toUpperCase()}</div><div><h3 class="font-bold text-[15px] text-white">${m.player}</h3><p class="text-app-accent font-bold text-[10px] uppercase tracking-widest mt-1">Assigned to</p></div></div><div class="text-right max-w-[45%] flex flex-col items-end"><span class="text-app-primary font-bold text-sm truncate drop-shadow-md">${m.deck ? m.deck.name : 'Unknown'}</span><div class="flex gap-1 justify-end mt-1.5 min-h-[20px]">${mH}</div></div></div>`; 
+            });
+
+            // RENDERIZA LOS MAZOS RESTANTES
+            const remSec = document.getElementById('rem-section');
+            const remCont = document.getElementById('remaining-container');
+            if(state.remainingDecks && state.remainingDecks.length > 0) {
+                remCont.innerHTML = state.remainingDecks.map(d => {
+                    const mH = d.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[11px]"></i>`).join(' ');
+                    return `<div class="bg-app-surface-light border border-white/5 p-3 rounded-xl flex justify-between items-center shadow-sm"><span class="text-[11px] font-bold text-slate-400 truncate w-3/4">${d.name}</span><div class="flex gap-1">${mH}</div></div>`;
+                }).join('');
+                remSec.classList.remove('hidden');
+            } else {
+                remSec.classList.add('hidden');
+            }
+
+            switchScreen(4);
+        }
+
+        function initBattlefield() { 
+            // TRANSICIÓN GIF 1
+            playTransition('https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExanhqcWY1ZDFreGt2ZHlsaHc2YXNuaDZiMzNoMDBhOHlmOG95cDNqYyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l41lZD0i4UU9PkDJe/giphy.gif', 2600, () => {
+                renderBattlefield(); 
+                switchScreen(5);
+            });
+        }
+
+        function renderBattlefield() {
+            const grid = document.getElementById('battlefield-grid');
+            const pCount = state.currentMatch.length;
+            const isCross = state.layoutMode === 'cross' && pCount === 4;
+            
+            grid.className = 'bf-grid';
+            if(isCross) grid.classList.add('bf-4p-cross');
+            else if(pCount === 2) grid.classList.add('bf-2p');
+            else if(pCount === 3) grid.classList.add('bf-3p');
+            else if(pCount === 4) grid.classList.add('bf-4p-grid');
+            else if(pCount === 5) grid.classList.add('bf-5p');
+            else grid.classList.add('bf-6p');
+            
+            if(pCount === 4) document.getElementById('layout-toggle-btn').classList.remove('hidden');
+            grid.innerHTML = '';
+            
+            state.currentMatch.forEach((p, i) => {
+                let rotate = ''; let pos = '';
+                if(isCross) { if(i===0){pos='cross-pos-0';rotate='rotate-180'} if(i===1){pos='cross-pos-1';rotate='rotate-90'} if(i===2){pos='cross-pos-2';rotate='-rotate-90'} if(i===3){pos='cross-pos-3';rotate='rotate-0'} }
+                else { if(pCount===2&&i===0)rotate='rotate-180'; if(pCount===3&&i===0){rotate='rotate-180';pos='bf-3p-top'} if(pCount>=4&&(i===0||i===1))rotate='rotate-180'; if(pCount===6&&i===2)rotate='rotate-180'; }
+                
+                let flexDir = 'flex-col';
+                let hitbox1 = '1';
+                let hitbox2 = '-1';
+
+                if (rotate === 'rotate-180') {
+                    hitbox1 = '-1';
+                    hitbox2 = '1';
+                } else if (rotate === 'rotate-90') { 
+                    flexDir = 'flex-row';
+                    hitbox1 = '-1'; 
+                    hitbox2 = '1';  
+                } else if (rotate === '-rotate-90') { 
+                    flexDir = 'flex-row';
+                    hitbox1 = '1';  
+                    hitbox2 = '-1'; 
+                }
+
+                let deadOverlay = p.isDead ? `
+                <div class="absolute inset-0 bg-zinc-950/85 backdrop-grayscale z-20 flex flex-col items-center justify-center pointer-events-auto transition-all duration-500">
+                    <span class="material-symbols-outlined text-[24vmin] text-[#1e83f5] drop-shadow-[0_0_35px_rgba(30,131,245,0.8)]">skull</span>
+                    <div class="mt-4 px-6 py-2 bg-[#1e83f5]/20 border border-[#1e83f5] text-white text-xs font-black tracking-widest uppercase rounded-full shadow-[0_0_15px_rgba(30,131,245,0.5)]">Eliminated</div>
+                    <p class="text-slate-300 font-medium italic mt-4 text-center px-8 text-sm drop-shadow-md">"${p.deathQuote}"</p>
+                </div>` : '';
+                
+                let lifeUI = p.isDead ? '' : `<span class="text-[clamp(4rem,12vh,9rem)] font-black tracking-tighter leading-none text-white">${p.life}</span>`;
+                
+                grid.innerHTML += `
+                <div class="relative w-full h-full flex flex-col justify-center items-center ${pos} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}">
+                    ${deadOverlay}
+                    <div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead?'hidden':''}">
+                        <div class="flex-1 life-btn w-full h-full cursor-pointer" onclick="changeLife(${i}, ${hitbox1})"></div>
+                        <div class="flex-1 life-btn w-full h-full cursor-pointer" onclick="changeLife(${i}, ${hitbox2})"></div>
+                    </div>
+                    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 ${rotate} w-full text-center pointer-events-none z-0 px-4 transition-opacity ${p.isDead?'opacity-20':''}">
+                        <h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate">${p.player}</h3>
+                        <p class="text-[12px] sm:text-sm font-bold text-white/90 truncate mb-1">${p.deck?p.deck.name:''}</p>
+                        ${lifeUI}
+                    </div>
+                    <div class="absolute bottom-4 left-0 w-full px-4 flex justify-between items-end pointer-events-none ${p.isDead?'hidden':''}">
+                        <div class="flex gap-2 flex-wrap">${renderCmdrDamageIcons(p)}</div>
+                        <button onclick="openCmdrModal(${i})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto z-30 shadow-lg active:scale-95 transition-transform backdrop-blur-sm">
+                            <span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span>
+                        </button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        function renderCmdrDamageIcons(player) { 
+            let html = ''; 
+            for (let attackerIdx in player.cmdrDmg) { 
+                let dmg = player.cmdrDmg[attackerIdx]; 
+                if(dmg > 0 && !state.currentMatch[attackerIdx].isDead) { 
+                    html += `<div class="size-10 rounded-full bg-red-900/90 border border-red-500/50 flex items-center justify-center flex-col shadow-lg"><span class="text-[9px] font-bold text-red-200 leading-none">${state.currentMatch[attackerIdx].player[0].toUpperCase()}</span><span class="text-[14px] font-black text-white leading-none">${dmg}</span></div>`; 
+                } 
+            } 
+            return html; 
+        }
+
+        function changeLife(idx, amt) { 
+            if(state.currentMatch[idx].isDead) return; 
+            state.currentMatch[idx].life += amt; 
+            saveData(); 
+            renderBattlefield(); 
+            setTimeout(() => checkEliminations(), 20); 
+        }
+        function toggleLayout() { state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; renderBattlefield(); toggleCenterMenu(); }
+
+        let currentCmdrTarget = -1;
+        function openCmdrModal(idx) {
+            currentCmdrTarget = idx;
+            const target = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = target.player;
+            const opts = document.getElementById('cmdr-options'); opts.innerHTML = '';
+            state.currentMatch.forEach((attacker, i) => { if(i !== idx && !attacker.isDead) { let dmg = target.cmdrDmg[i] || 0; opts.innerHTML += `<div class="flex items-center justify-between bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${attacker.player}</span><div class="flex items-center gap-4"><button onclick="changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${dmg}</span><button onclick="changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>`; } });
+            document.getElementById('cmdr-modal').classList.remove('hidden');
+        }
+        function changeCmdrDmg(tIdx, aIdx, amt) { 
+            let t = state.currentMatch[tIdx]; let old = t.cmdrDmg[aIdx] || 0; let n = Math.max(0, old + amt); t.cmdrDmg[aIdx] = n; t.life -= (n - old); 
+            saveData(); openCmdrModal(tIdx); renderBattlefield(); 
+            setTimeout(() => checkEliminations(), 20); 
+        }
+        function closeCmdrModal() { document.getElementById('cmdr-modal').classList.add('hidden'); }
+
+        let isCheckingDeath = false;
+        async function checkEliminations() {
+            if (isCheckingDeath) return;
+            isCheckingDeath = true;
+            let changed = false;
+            
+            for (let i = 0; i < state.currentMatch.length; i++) {
+                let p = state.currentMatch[i];
+                if (!p.isDead) {
+                    let cmdrDeath = false;
+                    if(p.cmdrDmg) { cmdrDeath = Object.values(p.cmdrDmg).some(d => d >= 21); }
+                    
+                    if (p.life <= 0 || cmdrDeath) {
+                        let reason = cmdrDeath ? "21 Commander Damage" : "0 Life";
+                        let isEliminated = await mfModal.show("Confirm Elimination", `${p.player} reached ${reason}.`, "skull", "confirm");
+                        
+                        if(isEliminated) {
+                            p.isDead = true;
+                            p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)];
+                            changed = true;
+                            if(currentCmdrTarget === i) closeCmdrModal(); 
+                        } else {
+                            if(cmdrDeath) {
+                                for(let k in p.cmdrDmg) if(p.cmdrDmg[k]>=21) p.cmdrDmg[k]=20;
+                            } else if (p.life <= 0) {
+                                p.life = 1;
+                            }
+                            changed = true;
+                        }
+                        saveData(); 
+                        renderBattlefield();
+                    }
+                }
+            }
+
+            let alive = state.currentMatch.filter(p => !p.isDead);
+            if(alive.length === 1 && state.currentMatch.length > 1) { 
+                setTimeout(() => { showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1200); 
+            }
+            
+            isCheckingDeath = false;
+        }
+
+        let menuOpen = false;
+        function toggleCenterMenu() { menuOpen = !menuOpen; const opts = document.getElementById('center-menu-options'); const btn = document.getElementById('center-menu-btn'); if(menuOpen) { opts.classList.remove('opacity-0', 'pointer-events-none'); btn.innerHTML = '<span class="material-symbols-outlined text-3xl">close</span>'; } else { opts.classList.add('opacity-0', 'pointer-events-none'); btn.innerHTML = '<span class="material-symbols-outlined text-3xl text-white">apps</span>'; } }
+        
+        async function resetLife() { 
+            const confirmReset = await mfModal.show("Reset Match", "All players will go back to 40 life.", "refresh", "confirm");
+            if(confirmReset) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); saveData(); renderBattlefield(); toggleCenterMenu(); } 
+        }
+        
+        function endMatchManual() { toggleCenterMenu(); goToScreen6Manual(); }
+
+        function rollD20All() {
+            toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden');
+            let html = ''; state.currentMatch.forEach((p, i) => { if(!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${p.player}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; });
+            document.getElementById('dice-container').innerHTML = html;
+            let count = 0; let final = {};
+            let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if(!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if(el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++;
+                if(count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if(!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if(r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if(el) { el.innerText = r; el.classList.remove('animate-pulse'); } } });
+                state.currentMatch.forEach((p, i) => { if(!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } });
+                setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); }
+            }, 50);
+        }
+
+        function goToScreen6Manual() { 
+            state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`;
+            const cont = document.getElementById('declare-winner-container');
+            state.currentMatch.forEach((m, i) => { cont.innerHTML += `<div onclick="showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead?'loser-card':''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${m.player[0]}</div><h3 class="font-black text-lg truncate w-full">${m.player}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead?'Eliminated':'Declare Winner'}</p></div></div>`; });
+            switchScreen(6); 
+        }
+
+        function showUltimateWinner(idx) {
+            // TRANSICIÓN GIF 2 (GAME OVER)
+            playTransition('https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbmpwanhpbDU2ZWlscHI4bDRvZ3psczkzMHR5bzlocTBmY3J3MWFiNSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vQZA3WY4C1iku6Q/giphy.gif', 2700, () => {
+                state.matchFinished = true; 
+                const winner = state.currentMatch[idx]; 
+                const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
+                
+                try { if (typeof confetti === 'function') { confetti({ particleCount: 300, spread: 150, origin: { y: 0.5 }, colors: ['#facc15', '#3b82f6', '#8b5cf6', '#ef4444', '#22c55e'], zIndex: 1000 }); } } catch (e) {}
+
+                state.history.unshift({ date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), pairings: state.currentMatch, winner: winner.player }); 
+                saveData(); renderHistory();
+                
+                document.getElementById('screen-6').innerHTML = `<div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full"><div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-yellow-400 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)]">trophy</span></div><h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${winner.player}</h2><h3 class="text-xl font-bold text-slate-300 mb-8 bg-white/5 px-4 py-1 rounded-full border border-white/10 uppercase">${winner.deck?winner.deck.name:''}</h3><div class="bg-app-surface p-6 rounded-2xl border border-white/5 shadow-lg mb-10 w-full max-w-sm"><p class="text-slate-200 italic text-lg leading-relaxed">"${quote}"</p></div><button onclick="startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button></div>`;
+                switchScreen(6);
+            });
+        }
+
+        function renderHistory() { const c = document.getElementById('history-container'); if(state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); c.innerHTML = state.history.slice(0,5).map((m, i) => `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button onclick="deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex justify-between mb-2 text-slate-500 uppercase font-bold tracking-tighter pr-8"><span>${m.date}</span><span class="text-yellow-400">🏆 ${m.winner}</span></div>${m.pairings.map(p => `<div class="flex justify-between py-0.5"><span class="text-slate-300">${p.player}</span><span class="text-slate-400 font-medium">${p.deck?p.deck.name:''}</span></div>`).join('')}</div>`).join(''); }
+        
+        async function deleteHistoryEntry(idx) { 
+            const isConfirmed = await mfModal.show("Delete Match?", "This action will remove the match from the history.", "delete", "confirm");
+            if(isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } 
+        }
+        
+        function shareWhatsApp() { let t = "⚔️ *MANAFOX BATTLE ASSIGNMENT* ⚔️\n\n"; state.currentMatch.forEach(m => t += `👤 *${m.player}* ➔ ${m.deck?m.deck.name:''}\n`); window.open(`https://wa.me/?text=${encodeURIComponent(t)}`); }
+        function reassignDecks() { executeAssignment(); }
+        function startOver() { state.tempPlayerNames = []; state.matchFinished = false; switchScreen(1); }
+    </script>
+</body>
+</html>

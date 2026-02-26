@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <title>ManaFox: Zorro Corp Edition (LAB)</title>
+    
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/mana-font@latest/css/mana.min.css" rel="stylesheet" type="text/css" />
+    
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: { 
+                extend: { 
+                    colors: { 
+                        "app-bg": "#09090b",       
+                        "app-surface": "#18181b",  
+                        "app-surface-light": "#27272a", 
+                        "app-primary": "#8b5cf6",  
+                        "app-accent": "#06b6d4",
+                        "app-js": "#f59e0b" 
+                    },
+                    fontFamily: { "sans": ["Inter", "sans-serif"] } 
+                } 
+            }
+        }
+    </script>
+    
+    <style>
+        body { background-color: #09090b; color: #f4f4f5; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .screen { display: none; opacity: 0; transition: opacity 0.3s ease; } 
+        .screen.active { display: block; opacity: 1; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        .mana-btn { transition: all 0.2s; border: 2px solid transparent; }
+        .mana-btn.active { border-color: #ffffff; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5); }
+        .mana-w { background-color: #eff51e !important; color: #000000 !important; }
+        .mana-u { background-color: #1e83f5 !important; color: #ffffff !important; }
+        .mana-b { background-color: #901ef5 !important; color: #ffffff !important; border-color: #475569; }
+        .mana-r { background-color: #f5901e !important; color: #ffffff !important; }
+        .mana-g { background-color: #0bef84 !important; color: #000000 !important; }
+        
+        .bf-grid { display: grid; width: 100vw; height: 100vh; gap: 4px; background: #000; }
+        .bf-2p { grid-template-rows: 1fr 1fr; }
+        .bf-3p { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; }
+        .bf-3p-top { grid-column: span 2; }
+        .bf-4p-grid { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; }
+        .bf-4p-cross { grid-template-rows: 25vh 50vh 25vh; grid-template-columns: 25vw 50vw 25vw; }
+        .cross-pos-0 { grid-area: 1 / 1 / 2 / 4; }
+        .cross-pos-1 { grid-area: 2 / 1 / 3 / 2; }
+        .cross-pos-2 { grid-area: 2 / 3 / 3 / 4; }
+        .cross-pos-3 { grid-area: 3 / 1 / 4 / 4; }
+        .bf-5p { grid-template-rows: 1fr 1fr; grid-template-columns: repeat(6, 1fr); }
+        .bf-5p > div:nth-child(1), .bf-5p > div:nth-child(2) { grid-column: span 3; }
+        .bf-5p > div:nth-child(3), .bf-5p > div:nth-child(4), .bf-5p > div:nth-child(5) { grid-column: span 2; }
+        .bf-6p { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr 1fr; }
+
+        .life-btn:active { background: rgba(255,255,255,0.15); }
+        
+        .liquid-bg {
+            background-color: #050505;
+            background-image: 
+                radial-gradient(circle at 20% 30%, var(--c1) 0%, transparent 80%),
+                radial-gradient(circle at 80% 20%, var(--c2) 0%, transparent 80%),
+                radial-gradient(circle at 80% 80%, var(--c3) 0%, transparent 80%),
+                radial-gradient(circle at 20% 80%, var(--c4) 0%, transparent 80%);
+            background-size: 150% 150%;
+            animation: fluidChaos 10s ease-in-out infinite alternate;
+        }
+
+        @keyframes fluidChaos {
+            0% { background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%; }
+            33% { background-position: 100% 100%, 0% 0%, 0% 100%, 100% 0%; }
+            66% { background-position: 0% 100%, 100% 100%, 100% 0%, 0% 0%; }
+            100% { background-position: 100% 0%, 0% 100%, 0% 0%, 100% 100%; }
+        }
+
+        .bg-texture::after { 
+            content: ""; position: absolute; inset: 0; opacity: 0.2; mix-blend-mode: overlay; pointer-events: none; 
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"); 
+            z-index: 1; 
+        }
+
+        #main-header { border-bottom: 2px dashed #f59e0b !important; }
+        #top-title::after { content: " LAB"; font-size: 10px; color: #f59e0b; font-weight: 900; vertical-align: top; margin-left: 2px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col pb-24">
+
+    <div id="transition-overlay" class="fixed inset-0 z-[100000] bg-black flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <img id="transition-gif" src="" class="w-full h-full object-contain" />
+    </div>
+
+    <div id="mf-modal" class="fixed inset-0 flex flex-col items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none scale-95" style="z-index: 99999; background-color: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+        <div id="mf-modal-content" class="bg-app-surface border border-app-primary/50 rounded-3xl p-6 w-full max-w-xs shadow-[0_0_40px_rgba(139,92,246,0.3)] text-center relative">
+            <span id="mf-modal-icon" class="material-symbols-outlined text-6xl mb-4 text-app-accent drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]">info</span>
+            <h3 id="mf-modal-title" class="font-black text-xl text-white mb-2 tracking-widest uppercase"></h3>
+            <p id="mf-modal-msg" class="text-slate-300 text-sm mb-8 whitespace-pre-line"></p>
+            <div id="mf-modal-btns" class="flex gap-4 justify-center"></div>
+        </div>
+    </div>
+
+    <div id="mode-modal" class="fixed inset-0 z-[90] bg-black/90 hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col">
+            <h3 class="font-black text-xl mb-6 text-center text-white tracking-widest uppercase">Select Mode</h3>
+            <div class="space-y-4">
+                <button onclick="setGameMode('commander')" class="w-full bg-app-surface-light border border-app-primary/40 rounded-2xl p-4 flex items-center gap-4 transition active:scale-95 text-left">
+                    <div class="size-12 rounded-full bg-app-primary/20 text-app-primary flex items-center justify-center flex-none"><span class="material-symbols-outlined">swords</span></div>
+                    <div><h4 class="font-black text-white">Commander FFA</h4><p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">Free for all • Life Counter</p></div>
+                </button>
+                <button onclick="setGameMode('jumpstart')" class="w-full bg-app-surface-light border border-app-js/40 rounded-2xl p-4 flex items-center gap-4 transition active:scale-95 text-left">
+                    <div class="size-12 rounded-full bg-app-js/20 text-app-js flex items-center justify-center flex-none"><span class="material-symbols-outlined">account_tree</span></div>
+                    <div><h4 class="font-black text-white">Jumpstart Tourney</h4><p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">1vs1 Brackets • Pack Drafts</p></div>
+                </button>
+            </div>
+            <button onclick="closeModeModal()" class="w-full mt-6 bg-transparent text-slate-500 hover:text-white transition py-3 font-bold uppercase tracking-widest">Cancel</button>
+        </div>
+    </div>
+
+    <div id="library-modal" class="fixed inset-0 z-[80] bg-black/90 hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col max-h-[85vh]">
+            <h3 class="font-black text-xl mb-2 text-center text-white tracking-widest uppercase">Library Manager</h3>
+            <div id="library-list" class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-4"></div>
+            <button onclick="closeLibraryManager()" class="w-full mt-4 bg-app-surface-light text-white transition py-4 rounded-xl font-bold uppercase tracking-widest border border-white/5 flex-none">Done</button>
+        </div>
+    </div>
+
+    <header id="main-header" class="flex-none px-4 pt-10 pb-4 flex items-center justify-between sticky top-0 bg-app-bg/95 backdrop-blur-md z-50 transition-transform">
+        <button onclick="handleHeaderAction()" class="size-10 flex-none flex items-center justify-center rounded-full hover:bg-white/10 transition-all relative group">
+            <div id="header-logo-container" class="size-8 flex items-center justify-center text-app-primary">
+                <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-[0_0_12px_currentColor]">
+                    <polygon points="50,90 15,35 50,15 85,35" fill="currentColor" opacity="0.9"/>
+                    <polygon points="50,90 15,35 10,55" fill="currentColor" opacity="0.6"/>
+                    <polygon points="50,90 85,35 90,55" fill="currentColor" opacity="0.6"/>
+                    <polygon points="15,35 25,5 40,22" fill="currentColor" opacity="0.8"/>
+                    <polygon points="85,35 75,5 60,22" fill="currentColor" opacity="0.8"/>
+                    <polygon points="50,15 35,35 50,55 65,35" fill="currentColor" opacity="0.7"/>
+                    <circle cx="35" cy="45" r="4" fill="#09090b" />
+                    <circle cx="65" cy="45" r="4" fill="#09090b" />
+                </svg>
+            </div>
+            <span id="header-back-icon" class="material-symbols-outlined hidden text-slate-300">arrow_back</span>
+        </button>
+        <div class="flex flex-col items-center flex-1 min-w-0 px-2 overflow-hidden">
+            <h1 id="top-title" class="text-xl font-black tracking-tighter uppercase italic w-full text-center">MANA<span id="title-color" class="text-app-primary">FOX</span></h1>
+            <div id="room-badge" onclick="copyRoomLink()" class="text-[11px] bg-app-primary/20 text-app-primary px-4 py-1 mt-1 rounded-full font-bold border border-app-primary/30 flex items-center justify-center gap-1.5 truncate">
+                <span class="material-symbols-outlined text-[12px]">link</span>#<span id="room-id-text">...</span>
+            </div>
+        </div>
+        <button onclick="showCredits()" class="size-10 flex-none flex items-center justify-center rounded-full bg-white/5 text-slate-400">
+            <span class="material-symbols-outlined text-[20px]">help</span>
+        </button>
+    </header>
+
+    <main id="screen-1" class="screen active px-4 mt-2">
+        <div class="text-center mb-6"><h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-500 tracking-tight">Battle Setup</h2></div>
+        <div class="mb-6"><h3 class="text-[10px] font-bold text-app-primary tracking-[0.2em] uppercase mb-3">Presets</h3><div class="flex gap-3 overflow-x-auto no-scrollbar"><div onclick="applyDandLPreset()" class="shrink-0 w-40 bg-app-surface border border-white/10 rounded-2xl p-4"><div class="size-8 bg-app-primary/20 rounded-lg flex items-center justify-center mb-1 text-app-primary font-bold">D&L</div><p class="text-[10px] text-slate-400">Daniel & Laura</p></div><div onclick="applyDJLPreset()" class="shrink-0 w-40 bg-app-surface border border-white/10 rounded-2xl p-4"><div class="size-8 bg-[#1e83f5]/20 rounded-lg flex items-center justify-center mb-1 text-[#1e83f5] font-bold">DJL</div><p class="text-[10px] text-slate-400">D, L & Julio</p></div></div></div>
+        <div class="space-y-4 mb-8">
+            <div class="bg-app-surface p-5 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg"><div class="flex flex-col"><span class="text-app-primary font-bold text-[10px] uppercase text-left">Players</span><span id="count-players" class="text-4xl font-black">2</span></div><div class="flex gap-2"><button onclick="updateCount('players', -1)" class="size-12 rounded-xl bg-app-surface-light text-xl">-</button><button onclick="updateCount('players', 1)" class="size-12 rounded-xl bg-app-surface-light text-xl">+</button></div></div>
+            <div class="bg-app-surface p-5 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg"><div class="flex flex-col"><span class="text-app-primary font-bold text-[10px] uppercase text-left">Library</span><span id="count-decks" class="text-4xl font-black">7</span></div><div class="flex gap-2"><button onclick="updateCount('decks', -1)" class="size-12 rounded-xl bg-app-surface-light text-xl">-</button><button onclick="updateCount('decks', 1)" class="size-12 rounded-xl bg-app-surface-light text-xl">+</button></div></div>
+        </div>
+        <div id="history-section" class="hidden"><h3 class="text-[10px] font-bold text-slate-500 tracking-widest uppercase mb-3">Recent Battles</h3><div id="history-container" class="space-y-3"></div></div>
+    </main>
+
+    <main id="screen-2" class="screen px-4 mt-2">
+        <div class="flex justify-between items-center mb-6"><h2 class="text-3xl font-black text-left">Deck Entry</h2><button onclick="openLibraryManager()" class="text-app-primary text-[10px] font-bold uppercase tracking-widest bg-app-primary/10 px-3 py-2 rounded-xl border border-app-primary/30 shadow-sm">Manage</button></div>
+        <div id="deck-inputs-container" class="space-y-4"></div>
+        <button onclick="addExtraDeck()" class="w-full mt-4 py-4 rounded-xl border-2 border-dashed border-app-primary/30 text-app-primary font-bold transition hover:bg-app-primary/5">+ Add Deck</button>
+    </main>
+
+    <main id="screen-3" class="screen px-4 mt-2">
+        <h2 class="text-3xl font-black mb-6 text-left">Who is playing?</h2>
+        <div id="saved-players-section" class="mb-6 hidden"><p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 text-left">Roster</p><div id="saved-players-container" class="flex gap-4 overflow-x-auto pb-4 pt-2 no-scrollbar"></div></div>
+        <div id="player-inputs-container" class="space-y-4 text-left"></div>
+        <button onclick="addExtraPlayer()" class="w-full mt-6 py-4 rounded-xl border-2 border-dashed border-app-primary/30 text-app-primary font-bold">+ Add Player</button>
+    </main>
+
+    <main id="screen-4" class="screen px-4 mt-2 relative">
+        <div class="fixed inset-0 z-[-1] bg-app-bg"></div>
+        <div class="text-center mt-6 mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">Battle Pairings</h2></div>
+        <div id="assignments-container" class="space-y-4 mb-8"></div>
+        <div id="rem-section" class="mb-10 hidden text-left"><h4 class="text-[11px] uppercase font-bold text-slate-400 mb-4">Remaining Decks</h4><div id="remaining-container" class="grid grid-cols-2 gap-3"></div></div>
+        <div class="space-y-3 pb-6"><button onclick="reassignDecks()" class="w-full bg-app-surface/90 border border-app-primary/40 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition active:scale-95 shadow-lg"><span class="material-symbols-outlined">shuffle</span> Reassign Pairings</button><button onclick="shareWhatsApp()" class="w-full bg-app-surface/90 border border-white/10 text-app-accent font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition active:scale-95"><span class="material-symbols-outlined">share</span> Share Pairings</button></div>
+    </main>
+
+    <main id="screen-5" class="screen">
+        <div class="fixed inset-0 z-40 bg-black overflow-hidden"><div id="battlefield-grid" class="bf-grid"></div><div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 flex items-center justify-center"><button id="center-menu-btn" onclick="toggleCenterMenu()" class="size-16 bg-app-surface border-2 border-white/20 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.8)] flex items-center justify-center text-white font-black text-xl active:scale-90 transition-transform"><span class="material-symbols-outlined text-3xl">apps</span></button><div id="center-menu-options" class="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-200 flex items-center justify-center"><button onclick="rollD20All()" class="pointer-events-auto absolute -top-20 bg-blue-600 text-white p-3.5 rounded-full shadow-lg"><span class="material-symbols-outlined">casino</span></button><button onclick="resetLife()" class="pointer-events-auto absolute -left-20 bg-yellow-600 text-white p-3.5 rounded-full shadow-lg"><span class="material-symbols-outlined">refresh</span></button><button onclick="endMatchManual()" class="pointer-events-auto absolute -right-20 bg-red-600 text-white p-3.5 rounded-full shadow-lg"><span class="material-symbols-outlined">flag</span></button><button id="layout-toggle-btn" onclick="toggleLayout()" class="pointer-events-auto absolute -bottom-20 bg-purple-600 text-white p-3.5 rounded-full shadow-lg hidden"><span class="material-symbols-outlined">dashboard</span></button></div></div><div id="dice-modal" class="absolute inset-0 z-[60] bg-black/95 hidden flex flex-col items-center justify-center p-6 backdrop-blur-md"><h3 class="font-black text-3xl mb-8 text-white uppercase tracking-widest">Rolling D20...</h3><div id="dice-container" class="w-full max-w-sm space-y-4 max-h-[80vh] overflow-y-auto no-scrollbar"></div></div><div id="cmdr-modal" class="absolute inset-0 z-[60] bg-black/80 hidden flex items-center justify-center p-4 backdrop-blur-sm"><div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm flex flex-col max-h-[90vh]"><h3 class="font-bold text-lg mb-4 text-center text-slate-400 uppercase tracking-widest">Commander Damage</h3><div id="cmdr-options" class="space-y-3 overflow-y-auto no-scrollbar flex-1 text-left"></div><button onclick="closeCmdrModal()" class="w-full mt-6 bg-app-surface-light text-white py-4 rounded-xl font-bold uppercase tracking-widest border border-white/5">Close</button></div></div></div>
+    </main>
+
+    <main id="screen-6" class="screen px-4 mt-2 pb-32">
+        <div id="declare-winner-container" class="w-full"></div>
+    </main>
+
+    <main id="screen-7" class="screen px-4 mt-2">
+        <div class="text-center mb-10"><h2 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-app-js to-yellow-300 tracking-tight">Jumpstart Tourney</h2></div>
+        <div class="grid grid-cols-1 gap-4 max-w-xs mx-auto"><button onclick="setJSPlayers(4)" id="js-btn-4" class="bg-app-surface border-2 border-white/5 text-white py-5 rounded-2xl font-black text-2xl transition active:scale-95 flex items-center justify-center gap-3">4 Players</button><button onclick="setJSPlayers(8)" id="js-btn-8" class="bg-app-surface border-2 border-app-js/50 text-white py-5 rounded-2xl font-black text-2xl transition shadow-[0_0_20px_rgba(245,158,11,0.2)] active:scale-95 flex items-center justify-center gap-3">8 Players</button><button onclick="setJSPlayers(16)" id="js-btn-16" class="bg-app-surface border-2 border-white/5 text-white py-5 rounded-2xl font-black text-2xl transition active:scale-95 flex items-center justify-center gap-3">16 Players</button></div>
+    </main>
+
+    <main id="screen-8" class="screen px-4 mt-2">
+        <h2 class="text-3xl font-black mb-6 text-left">Contenders</h2>
+        <div id="js-saved-players-section" class="mb-6 hidden text-left"><p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3">Roster</p><div id="js-saved-players-container" class="flex gap-4 overflow-x-auto pb-4 pt-2 no-scrollbar"></div></div>
+        <div id="js-player-inputs-container" class="space-y-3"></div>
+    </main>
+
+    <main id="screen-9" class="screen px-4 mt-2 relative">
+        <div class="flex justify-between items-center mb-6 text-left"><h2 class="text-3xl font-black text-white tracking-tight">The Bracket</h2><button onclick="revertJSWinner()" class="size-10 rounded-full bg-app-surface border border-white/10 flex items-center justify-center text-slate-400"><span class="material-symbols-outlined">undo</span></button></div>
+        <div id="js-tabs" class="flex gap-2 overflow-x-auto no-scrollbar mb-6 pb-2"></div>
+        <div id="js-matches" class="space-y-4 pb-12"></div>
+    </main>
+
+    <div id="js-match-modal" class="fixed inset-0 z-[100] bg-black/90 hidden flex flex-col items-center justify-center p-4 backdrop-blur-md"><div class="bg-app-surface border border-app-js/40 rounded-3xl p-6 w-full max-w-sm flex flex-col text-center relative overflow-hidden"><button onclick="closeJSModal()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition z-20"><span class="material-symbols-outlined">close</span></button><div id="js-modal-content" class="relative z-10 text-left"></div></div></div>
+
+    <div id="main-action-bar" class="fixed bottom-0 left-0 w-full px-4 pt-4 pb-6 bg-app-bg/95 backdrop-blur-md z-50 border-t border-white/5">
+        <button id="main-btn" onclick="handleNextStep()" class="w-full max-w-md mx-auto bg-app-primary text-white font-bold py-4 rounded-xl shadow-[0_4px_15px_rgba(139,92,246,0.4)] flex items-center justify-center transition-transform active:scale-95">Next Step</button>
+    </div>
+
+    <script>
+        const mfModal = {
+            show: function(title, msg, icon, type = 'alert') {
+                return new Promise((resolve) => {
+                    document.getElementById('mf-modal-title').innerText = title;
+                    document.getElementById('mf-modal-msg').innerText = msg;
+                    document.getElementById('mf-modal-icon').innerText = icon;
+                    let btns = document.getElementById('mf-modal-btns');
+                    let color = state.gameMode === 'jumpstart' ? 'app-js' : 'app-primary';
+                    let rgb = state.gameMode === 'jumpstart' ? '245,158,11' : '139,92,246';
+                    if(type === 'confirm') {
+                        btns.innerHTML = `<button id="mf-btn-cancel" class="flex-1 bg-app-surface border border-white/10 text-white py-4 rounded-xl font-bold transition active:scale-95">Cancel</button><button id="mf-btn-ok" class="flex-1 bg-${color} text-white py-4 rounded-xl font-bold transition shadow-[0_0_15px_rgba(${rgb},0.5)] active:scale-95">Confirm</button>`;
+                        document.getElementById('mf-btn-cancel').onclick = () => { mfModal.hide(); resolve(false); };
+                        document.getElementById('mf-btn-ok').onclick = () => { mfModal.hide(); resolve(true); };
+                    } else {
+                        btns.innerHTML = `<button id="mf-btn-ok" class="w-full bg-${color} text-white py-4 rounded-xl font-bold shadow-[0_0_15px_rgba(${rgb},0.5)] active:scale-95">Got it</button>`;
+                        document.getElementById('mf-btn-ok').onclick = () => { mfModal.hide(); resolve(true); };
+                    }
+                    const el = document.getElementById('mf-modal');
+                    el.classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+                });
+            },
+            hide: function() { document.getElementById('mf-modal').classList.add('opacity-0', 'pointer-events-none', 'scale-95'); }
+        };
+
+        const GIFS = {
+            BATTLE: 'https://media0.giphy.com/media/l41lZD0i4UU9PkDJe/giphy.gif',
+            WINNER: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbmpwanhpbDU2ZWlscHI4bDRvZ3psczkzMHR5bzlocTBmY3J3MWFiNSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vQZA3WY4C1iku6Q/giphy.gif'
+        };
+
+        function preloadGifs() {
+            Object.values(GIFS).forEach(url => { const img = new Image(); img.src = url; });
+        }
+
+        function playTransition(gifUrl, duration, callback) {
+            const overlay = document.getElementById('transition-overlay');
+            const gif = document.getElementById('transition-gif');
+            gif.src = ""; 
+            requestAnimationFrame(() => {
+                gif.src = gifUrl;
+                overlay.classList.remove('opacity-0', 'pointer-events-none');
+                setTimeout(() => { callback(); setTimeout(() => { overlay.classList.add('opacity-0', 'pointer-events-none'); }, 800); }, duration);
+            });
+        }
+
+        const baseDecks = [{ name: "Jeskai Striker (Shiko)", colors: ['W', 'R', 'U'] }, { name: "Endless Punishment (Valgavoth)", colors: ['B', 'R'] }, { name: "Eldrazi Incursion (Ulalek)", colors: ['W', 'U', 'B', 'R', 'G'] }, { name: "Dance of Elements (Ashling)", colors: ['W', 'U', 'B', 'R', 'G'] }, { name: "Evangelion (Eva01)", colors: ['W', 'U'] }, { name: "Death Toll (Winter)", colors: ['B', 'G'] }, { name: "Sultai Arisen (Teval)", colors: ['B', 'G', 'U'] }];
+        const winQuotes = ["Your Spark burns brighter than ever! ⚡", "A flawless victory, Planeswalker. 🏆", "The Multiverse bows to your command. 🌌"];
+        const loseQuotes = ["Mana flooded, or just outplayed? 💧", "Countered. Destroyed. Forgotten. 💀", "Your Spark fades into the blind eternities... 🌑"];
+
+        let state = { 
+            gameMode: 'commander', step: 1, players: 2, decks: 7, deckData: [], tempPlayerNames: [], savedPlayers: [], savedDecks: [], history: [], remainingDecks: [],
+            manaColors: [{id:'W',cls:'mana-w',icon:`<i class="ms ms-w text-lg"></i>`},{id:'U',cls:'mana-u',icon:`<i class="ms ms-u text-lg"></i>`},{id:'B',cls:'mana-b',icon:`<i class="ms ms-b text-lg"></i>`},{id:'R',cls:'mana-r',icon:`<i class="ms ms-r text-lg"></i>`},{id:'G',cls:'mana-g',icon:`<i class="ms ms-g text-lg"></i>`}], 
+            matchFinished: false, startingLife: 40, layoutMode: 'cross', js: { count: 8, bracket: [], currentViewRound: 0, lastWinnerLog: [] }
+        };
+
+        let lastSyncTime = 0;
+        let roomId = window.location.hash.substring(1) || ('Zorro-' + Math.floor(Math.random() * 100000));
+        window.location.hash = roomId;
+        
+        document.addEventListener("DOMContentLoaded", () => { 
+            preloadGifs();
+            switchScreen(1); 
+            document.getElementById('room-id-text').innerText = roomId;
+        });
+        
+        const gun = Gun(['https://gun-manhattan.herokuapp.com/gun']);
+        window.cloudRoom = gun.get('mtg-manafox-v4.5.4-LAB-ENVIRONMENT').get(roomId);
+        
+        window.cloudRoom.get('sharedData').on((data) => { 
+            if (data) { 
+                try { 
+                    const parsed = JSON.parse(data); 
+                    if(parsed.ts && parsed.ts < lastSyncTime) return; 
+                    lastSyncTime = parsed.ts; 
+                    state.savedPlayers = parsed.p || []; state.savedDecks = parsed.d || []; state.history = parsed.h || []; state.gameMode = parsed.gM || 'commander'; state.js = parsed.js || state.js;
+                    applyThemeColors();
+                    if(state.gameMode === 'commander') { if(parsed.m && state.step === 5) { state.currentMatch = parsed.m; renderBattlefield(); } if(state.step < 5) renderHistory(); if(state.step === 3) renderSavedPlayers(); } 
+                    else { if(state.step === 8) renderJSSavedPlayers(); if(state.step === 9) { renderJSBracket(); if(currentJSModalMatch) openJSMatchModal(currentJSModalMatch.r, currentJSModalMatch.m); } }
+                } catch(e) {} 
+            } 
+        });
+
+        function saveData() { lastSyncTime = Date.now(); window.cloudRoom.get('sharedData').put(JSON.stringify({ ts: lastSyncTime, p: state.savedPlayers, d: state.savedDecks, h: state.history, m: state.currentMatch, gM: state.gameMode, js: state.js })); }
+        async function copyRoomLink() { navigator.clipboard.writeText(window.location.href); await mfModal.show('Link Copied', 'Share this link to sync devices.', 'link'); }
+        async function showCredits() { await mfModal.show("ManaFox: Zorro Corp", "Versión: v4.5.4 (Stable Lab)\n\n- Fix: Fluidos dinámicos restaurados.\n- Fix: UI de Copa de Victoria y Confeti funcionales.", "help"); }
+        function updateCount(t,v) { state[t] = Math.min(t==='players'?6:20, Math.max(2, state[t]+v)); document.getElementById('count-'+t).innerText = state[t]; }
+        function applyDandLPreset() { state.players = 2; state.decks = 7; state.deckData = baseDecks.map(d=>({...d, colors:[...d.colors]})); state.tempPlayerNames = ["Daniel", "Laura"]; goToDecks(); }
+        function applyDJLPreset() { state.players = 3; state.decks = 7; state.deckData = baseDecks.map(d=>({...d, colors:[...d.colors]})); state.tempPlayerNames = ["Daniel", "Laura", "Julio"]; goToDecks(); }
+        function openModeModal() { document.getElementById('mode-modal').classList.remove('hidden'); }
+        function closeModeModal() { document.getElementById('mode-modal').classList.add('hidden'); }
+        function setGameMode(mode) { state.gameMode = mode; applyThemeColors(); closeModeModal(); startOver(); }
+        function applyThemeColors() { const logo = document.getElementById('header-logo-container'); const title = document.getElementById('title-color'); if (state.gameMode === 'jumpstart') { logo.className = 'size-8 flex items-center justify-center text-app-js'; title.className = 'text-app-js'; } else { logo.className = 'size-8 flex items-center justify-center text-app-primary'; title.className = 'text-app-primary'; } }
+
+        function switchScreen(s) { 
+            document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active')); document.getElementById('screen-'+s).classList.add('active'); state.step = s; 
+            const header = document.getElementById('main-header'); const bar = document.getElementById('main-action-bar');
+            header.style.display = (state.gameMode === 'commander' && s === 5) ? 'none' : 'flex';
+            bar.style.display = (s < 5 || s === 7 || s === 8) ? 'block' : 'none';
+            const backIcon = document.getElementById('header-back-icon'); const logoCont = document.getElementById('header-logo-container');
+            backIcon.style.display = (s === 1 || s === 7) ? 'none' : 'block'; logoCont.style.display = (s === 1 || s === 7) ? 'flex' : 'none';
+            updateActionBar(); window.scrollTo(0,0); 
+        }
+
+        function updateActionBar() {
+            const btn = document.getElementById('main-btn'); if (!btn) return;
+            if (state.gameMode === 'commander') {
+                btn.className = "w-full max-w-md mx-auto bg-app-primary text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg";
+                btn.innerHTML = state.step === 3 ? 'Assign Decks' : (state.step === 4 ? 'Start Battlefield' : 'Next Step');
+            } else {
+                btn.className = "w-full max-w-md mx-auto bg-app-js text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg";
+                btn.innerHTML = state.step === 7 ? 'Define Contenders' : (state.step === 8 ? 'Generate Bracket' : 'Next Step');
+            }
+        }
+
+        async function handleHeaderAction() { if(state.step === 1 || state.step === 7) openModeModal(); else goBack(); }
+        function goBack() { if(state.gameMode === 'commander') { if(state.step===2) switchScreen(1); if(state.step===3) switchScreen(2); if(state.step===4) switchScreen(3); if(state.step===6 && !state.matchFinished) switchScreen(5); } else { if(state.step===8) switchScreen(7); if(state.step===9) switchScreen(8); } }
+        
+        async function handleNextStep() { 
+            if(state.gameMode === 'commander') {
+                if(state.step===1) goToDecks(); 
+                else if(state.step===2) { if(!state.deckData.some(d => d.name.trim() !== "")) return; let allE = [...baseDecks, ...state.savedDecks]; state.deckData.forEach(d => { if (d.name.trim() !== "" && !allE.some(ex => ex.name.toLowerCase() === d.name.trim().toLowerCase())) state.savedDecks.push({ name: d.name.trim(), colors: [...d.colors] }); }); saveData(); goToPlayers(); } 
+                else if(state.step===3) { if (state.deckData.filter(d => d.name.trim() !== "").length < state.players) return mfModal.show("Warning", `Need more physical decks!`, "warning"); for(let i=0; i<state.players; i++) { let pN = document.getElementById('p-in-'+i).value.trim(); if(pN && !state.savedPlayers.some(p => p.toLowerCase() === pN.toLowerCase())) state.savedPlayers.push(pN); } saveData(); executeAssignment(); } 
+                else if(state.step===4) initBattlefield(); 
+            } else { if(state.step===7) goToJSPlayers(); else if(state.step===8) { state.tempPlayerNames = []; for(let i=0; i<state.js.count; i++) { let v = document.getElementById(`p-in-js-${i}`).value.trim(); if(!v) return mfModal.show("Error", "Fill all names.", "error"); state.tempPlayerNames.push(v); } state.tempPlayerNames.forEach(pN => { if(!state.savedPlayers.some(p => p.toLowerCase() === pN.toLowerCase())) state.savedPlayers.push(pN); }); saveData(); generateJSBracket(); switchScreen(9); } }
+        }
+
+        // --- LÓGICA CORE COMMANDER ---
+        function buildDeckDOM() { const c = document.getElementById('deck-inputs-container'); c.innerHTML = ''; const lib = [...baseDecks, ...state.savedDecks]; state.deckData.forEach((d,i) => { const colorsHTML = state.manaColors.map(m => `<button onclick="toggleColor(${i},'${m.id}')" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id)?'active':'opacity-30'}">${m.icon}</button>`).join(''); c.innerHTML += `<div class="bg-app-surface p-4 rounded-2xl border border-white/5 shadow-sm"><div class="flex justify-between items-center mb-2"><label class="text-[10px] font-bold text-app-primary uppercase">Deck #${i+1}</label><div class="flex gap-2"><select onchange="loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld,idx)=>`<option value="${idx}">${ld.name}</option>`).join('')}</select><button onclick="removeDeck(${i})" class="text-red-400">✕</button></div></div><input type="text" oninput="state.deckData[${i}].name=this.value" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 text-white" value="${d.name}" placeholder="Name"><div class="flex gap-2">${colorsHTML}</div></div>`; }); }
+        function loadDeck(di, li) { const d = [...baseDecks, ...state.savedDecks][li]; state.deckData[di] = {name:d.name, colors:[...d.colors]}; buildDeckDOM(); }
+        function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors.includes(mi) ? d.colors.filter(c=>c!==mi) : [...d.colors, mi]; buildDeckDOM(); }
+        function removeDeck(i) { state.deckData.splice(i,1); state.decks--; buildDeckDOM(); }
+        function addExtraDeck() { state.decks++; state.deckData.push({name:'',colors:[]}); buildDeckDOM(); }
+        function goToDecks() { if(state.deckData.length===0) state.deckData = Array.from({length:state.decks},()=>({name:'', colors:[]})); buildDeckDOM(); switchScreen(2); }
+        function openLibraryManager() { const list = document.getElementById('library-list'); list.innerHTML = ''; if(state.savedDecks.length === 0) list.innerHTML = '<p class="italic mt-8 text-center">No custom decks.</p>'; else state.savedDecks.forEach((d, i) => { list.innerHTML += `<div class="flex items-center justify-between bg-app-surface-light p-3 rounded-xl border border-white/5"><div class="text-left"><span class="font-bold text-sm text-white">${d.name}</span></div><button onclick="deleteSavedDeck(${i})" class="text-red-400">Delete</button></div>`; }); document.getElementById('library-modal').classList.remove('hidden'); }
+        function closeLibraryManager() { document.getElementById('library-modal').classList.add('hidden'); buildDeckDOM(); }
+        async function deleteSavedDeck(idx) { const c = await mfModal.show("Delete?", "Remove from library?", "delete", "confirm"); if(c) { state.savedDecks.splice(idx, 1); saveData(); openLibraryManager(); } }
+
+        function goToPlayers() { const c = document.getElementById('player-inputs-container'); c.innerHTML = ''; if(state.savedPlayers.length>0) { document.getElementById('saved-players-section').classList.remove('hidden'); renderSavedPlayers(); } let validD = state.deckData.filter(d => d.name.trim() !== ""); let deckOpts = `<option value="-1">🎲 Random</option>` + validD.map((d, idx) => `<option value="${idx}">${d.name}</option>`).join(''); for(let i=0; i<state.players; i++) { c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button onclick="removePlayer(${i})" class="absolute right-3 top-2 text-red-400">✕</button><label class="text-[10px] font-bold text-slate-500 uppercase">Player ${i+1}</label><div class="flex flex-col gap-2 mt-2"><input type="text" id="p-in-${i}" oninput="state.tempPlayerNames[${i}]=this.value" class="w-full bg-app-surface-light border-none rounded-xl py-3 text-sm text-white" value="${state.tempPlayerNames[i]||''}" placeholder="Name"><select id="p-lock-${i}" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 text-xs">${deckOpts}</select></div></div>`; } switchScreen(3); }
+        function renderSavedPlayers() { document.getElementById('saved-players-container').innerHTML = state.savedPlayers.map((p,i)=>`<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] rounded-full border border-white/10 opacity-70">✕</button><div onclick="quickAdd('${p}')" class="size-12 rounded-full border border-app-primary bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm active:bg-app-primary/20">${p[0].toUpperCase()}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${p}</span></div>`).join(''); }
+        function quickAdd(n) { let count = state.gameMode==='commander'?state.players:state.js.count; let prefix = state.gameMode==='commander'?'p-in-':'p-in-js-'; for(let i=0; i<count; i++){ const inp = document.getElementById(prefix+i); if(inp && !inp.value){ inp.value = n; break; } } }
+        async function deleteSavedPlayer(i) { const c = await mfModal.show("Remove?", `Delete ${state.savedPlayers[i]}?`, "person_remove", "confirm"); if(c) { state.savedPlayers.splice(i,1); saveData(); state.gameMode==='commander'?renderSavedPlayers():renderJSSavedPlayers(); } }
+        function removePlayer(i) { if(state.players <= 1) return; state.tempPlayerNames.splice(i, 1); state.players--; goToPlayers(); }
+        function addExtraPlayer() { state.players++; goToPlayers(); }
+
+        function executeAssignment() { let validD = state.deckData.filter(d => d.name.trim() !== ""); state.tempPlayerNames = Array.from({length:state.players}, (_,i)=>document.getElementById('p-in-'+i).value.trim()); let pool = validD.map((d, index) => ({...d, origIdx: index})); state.currentMatch = []; let locks = []; for(let i=0; i<state.players; i++){ let pref = parseInt(document.getElementById(`p-lock-${i}`).value); locks.push(pref); if(pref !== -1) { let idx = pool.findIndex(d => d.origIdx === pref); if(idx > -1) pool.splice(idx, 1); } } for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; } for(let i=0; i<state.players; i++) { let pN = state.tempPlayerNames[i] || 'P'+(i+1); let deck = locks[i] !== -1 ? validD[locks[i]] : pool.shift(); state.currentMatch.push({ player: pN, deck, life: 40, cmdrDmg: {}, isDead: false, themeVars: getPlayerTheme(deck?deck.colors:[]), deathQuote: "" }); } state.remainingDecks = [...pool]; saveData(); buildResultsDOM(); switchScreen(4); }
+        
+        // BUG DE FLUIDOS SOLUCIONADO AQUÍ: map[c[0]] en lugar de map[0]
+        function getPlayerTheme(c) { 
+            const map = { 'W': 'rgba(239, 245, 30, 0.9)', 'U': 'rgba(30, 131, 245, 0.9)', 'B': 'rgba(144, 30, 245, 0.9)', 'R': 'rgba(245, 144, 30, 0.9)', 'G': 'rgba(11, 239, 132, 0.9)' }; 
+            let c1 = 'rgba(71, 85, 105, 0.8)', c2 = 'rgba(51, 65, 85, 0.8)', c3 = 'rgba(30, 41, 59, 0.8)', c4 = 'rgba(15, 23, 42, 0.8)'; 
+            if (c && c.length > 0) { 
+                c1 = map[c[0]]; 
+                if (c.length === 1) { c2 = map[c[0]]; c3 = 'rgba(0,0,0,0.5)'; c4 = map[c[0]]; } 
+                else if (c.length === 2) { c2 = map[c[1]]; c3 = map[c[0]]; c4 = map[c[1]]; } 
+                else { c2 = map[c[1]]; c3 = map[c[2]]; c4 = map[c[0]]; } 
+            } 
+            return `--c1: ${c1}; --c2: ${c2}; --c3: ${c3}; --c4: ${c4};`; 
+        }
+
+        function buildResultsDOM() { const c = document.getElementById('assignments-container'); c.innerHTML = ''; state.currentMatch.forEach(m => { const mH = m.deck ? m.deck.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-xs"></i>`).join(' ') : ''; c.innerHTML += `<div class="bg-app-surface/90 p-4 rounded-2xl border border-white/5 flex justify-between items-center"><div class="flex items-center gap-4"><div class="size-10 rounded-full bg-app-surface-light flex items-center justify-center font-bold text-white">${m.player[0].toUpperCase()}</div><div class="text-left"><h3 class="font-bold text-white">${m.player}</h3><p class="text-[10px] text-app-accent uppercase font-bold tracking-widest">Assigned</p></div></div><div class="text-right"><span class="text-app-primary font-bold text-sm truncate block">${m.deck?m.deck.name:'?'}</span><div class="mt-1">${mH}</div></div></div>`; }); const remSec = document.getElementById('rem-section'); if(state.remainingDecks.length > 0) { remSec.classList.remove('hidden'); document.getElementById('remaining-container').innerHTML = state.remainingDecks.map(d => `<div class="bg-app-surface-light p-2 rounded-xl text-[10px] flex justify-between"><span>${d.name}</span></div>`).join(''); } else remSec.classList.add('hidden'); switchScreen(4); }
+        function initBattlefield() { playTransition(GIFS.BATTLE, 2600, () => { renderBattlefield(); switchScreen(5); }); }
+        
+        function renderBattlefield() { const grid = document.getElementById('battlefield-grid'); const count = state.currentMatch.length; grid.className = 'bf-grid'; if(count===2) grid.classList.add('bf-2p'); else if(count===3) grid.classList.add('bf-3p'); else if(count===4) grid.classList.add('bf-4p-grid'); else if(count===5) grid.classList.add('bf-5p'); else grid.classList.add('bf-6p'); grid.innerHTML = ''; state.currentMatch.forEach((p, i) => { let rot = (count===2&&i===0)||(count===3&&i===0)||(count>=4&&(i===0||i===1)) ? 'rotate-180' : ''; let lifeUI = p.isDead ? `<span class="material-symbols-outlined text-[15vmin] text-[#1e83f5] drop-shadow-[0_0_20px_#1e83f5]">skull</span>` : `<span class="text-[18vmin] font-black leading-none text-white">${p.life}</span>`; grid.innerHTML += `<div class="relative w-full h-full flex items-center justify-center liquid-bg bg-texture overflow-hidden" style="${p.themeVars}"><div class="absolute inset-0 flex flex-col z-10 ${p.isDead?'hidden':''}"><div class="flex-1 cursor-pointer" onclick="changeLife(${i},1)"></div><div class="flex-1 cursor-pointer" onclick="changeLife(${i},-1)"></div></div><div class="${rot} text-center z-0 transition-opacity ${p.isDead?'opacity-30':'opacity-100'} px-4"><h3 class="text-xl font-black uppercase text-white drop-shadow-md truncate">${p.player}</h3><p class="text-[10px] font-bold text-white/80 truncate mb-2">${p.deck?p.deck.name:''}</p>${lifeUI}</div><div class="absolute bottom-4 left-4 z-20 ${p.isDead?'hidden':''}"><button onclick="openCmdrModal(${i})" class="size-10 rounded-full bg-black/40 text-white flex items-center justify-center border border-white/20 active:scale-95"><span class="material-symbols-outlined">swords</span></button></div></div>`; }); }
+        function changeLife(idx, amt) { if(state.currentMatch[idx].isDead) return; state.currentMatch[idx].life += amt; saveData(); renderBattlefield(); setTimeout(() => checkEliminations(), 20); }
+        async function checkEliminations() { if (isCheckingDeath) return; isCheckingDeath = true; for (let i = 0; i < state.currentMatch.length; i++) { let p = state.currentMatch[i]; if (!p.isDead && (p.life <= 0 || Object.values(p.cmdrDmg).some(d => d >= 21))) { let ok = await mfModal.show("Eliminated?", `${p.player} is out.`, "skull", "confirm"); if(ok) { p.isDead = true; saveData(); renderBattlefield(); } else { p.life = 1; } } } if(state.currentMatch.filter(p=>!p.isDead).length === 1 && state.currentMatch.length > 1) setTimeout(() => showUltimateWinner(state.currentMatch.findIndex(p=>!p.isDead)), 1000); isCheckingDeath = false; }
+        let isCheckingDeath = false;
+        function openCmdrModal(idx) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i!==idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span>${a.player}</span><div class="flex items-center gap-3"><button onclick="changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg">-</button><span class="font-black text-red-400">${t.cmdrDmg[i]||0}</span><button onclick="changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg">+</button></div></div>` : '').join(''); document.getElementById('cmdr-modal').classList.remove('hidden'); }
+        function changeCmdrDmg(tI, aI, v) { let t = state.currentMatch[tI]; let old = t.cmdrDmg[aI]||0; let n = Math.max(0, old+v); t.cmdrDmg[aI] = n; t.life -= (n - old); saveData(); openCmdrModal(tI); renderBattlefield(); setTimeout(() => checkEliminations(), 20); }
+        function closeCmdrModal() { document.getElementById('cmdr-modal').classList.add('hidden'); }
+        function toggleCenterMenu() { let m = document.getElementById('center-menu-options'); let b = document.getElementById('center-menu-btn'); m.classList.toggle('opacity-0'); m.classList.toggle('pointer-events-none'); b.innerHTML = m.classList.contains('opacity-0') ? '<span class="material-symbols-outlined">apps</span>' : '<span class="material-symbols-outlined">close</span>'; }
+        async function resetLife() { if(await mfModal.show("Reset?", "Back to 40 life?", "refresh", "confirm")){ state.currentMatch.forEach(m=>{m.life=40;m.isDead=false;m.cmdrDmg={}}); saveData(); renderBattlefield(); toggleCenterMenu(); } }
+        function endMatchManual() { toggleCenterMenu(); goToScreen6Manual(); }
+        
+        // UI REPARADA DE SELECCIÓN MANUAL DE GANADOR
+        function goToScreen6Manual() { 
+            state.matchFinished = false; 
+            document.getElementById('screen-6').innerHTML = `
+                <div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div>
+                <div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`;
+            const c = document.getElementById('declare-winner-container'); 
+            c.innerHTML = state.currentMatch.map((m,i)=>`
+                <div onclick="showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead?'opacity-50 grayscale':''}">
+                    <div class="flex flex-col items-center text-center relative z-10">
+                        <div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${m.player[0]}</div>
+                        <h3 class="font-black text-lg truncate w-full">${m.player}</h3>
+                        <p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead?'Eliminated':'Declare Winner'}</p>
+                    </div>
+                </div>`).join(''); 
+            switchScreen(6); 
+        }
+
+        // UI DE VICTORIA REPARADA (COPA Y CONFETI)
+        function showUltimateWinner(idx) { 
+            playTransition(GIFS.WINNER, 2700, () => { 
+                state.matchFinished = true; 
+                const w = state.currentMatch[idx]; 
+                const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
+                try { if (typeof confetti === 'function') { confetti({ particleCount: 300, spread: 150, origin: { y: 0.5 }, colors: ['#facc15', '#3b82f6', '#8b5cf6', '#ef4444', '#22c55e'], zIndex: 1000 }); } } catch (e) {}
+                state.history.unshift({ date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), pairings: state.currentMatch, winner: w.player, mode: 'Commander' }); 
+                saveData(); 
+                renderHistory();
+                document.getElementById('screen-6').innerHTML = `
+                    <div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full">
+                        <div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-yellow-400 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)]">emoji_events</span></div>
+                        <h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${w.player}</h2>
+                        <h3 class="text-xl font-bold text-slate-300 mb-8 bg-white/5 px-4 py-1 rounded-full border border-white/10 uppercase">${w.deck?w.deck.name:''}</h3>
+                        <div class="bg-app-surface p-6 rounded-2xl border border-white/5 shadow-lg mb-10 w-full max-w-sm"><p class="text-slate-200 italic text-lg leading-relaxed">"${quote}"</p></div>
+                        <button onclick="startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button>
+                    </div>`; 
+                switchScreen(6); 
+            }); 
+        }
+
+        function startOver() { state.tempPlayerNames=[]; state.matchFinished=false; switchScreen(state.gameMode==='commander'?1:7); }
+        
+        function renderHistory() { 
+            const c = document.getElementById('history-container'); 
+            if(state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); 
+            c.innerHTML = state.history.slice(0,5).map((m, i) => `
+                <div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group">
+                    <button onclick="deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 opacity-100 transition-all"><span class="material-symbols-outlined text-[16px]">delete</span></button>
+                    <div class="flex justify-between mb-2 text-slate-500 uppercase font-bold tracking-tighter pr-8">
+                        <span>${m.date}</span>
+                        <span class="text-yellow-400">🏆 ${m.winner} <span class="text-[8px] text-slate-600 ml-1">(${m.mode || 'Commander'})</span></span>
+                    </div>
+                    ${(m.mode === 'Jumpstart' || !m.pairings) ? '' : m.pairings.map(p => `
+                        <div class="flex justify-between py-0.5">
+                            <span class="text-slate-300">${p.player}</span>
+                            <span class="text-slate-400 font-medium">${p.deck?p.deck.name:''}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join(''); 
+        }
+
+        // --- JUMPSTART CORE ---
+        function setJSPlayers(n) { state.js.count = n; document.querySelectorAll('[id^="js-btn-"]').forEach(el => el.classList.remove('border-app-js/50')); document.getElementById(`js-btn-${n}`).classList.add('border-app-js/50'); }
+        function goToJSPlayers() { const c = document.getElementById('js-player-inputs-container'); c.innerHTML = ''; if(state.savedPlayers.length > 0) { document.getElementById('js-saved-players-section').classList.remove('hidden'); renderJSSavedPlayers(); } for(let i=0; i<state.js.count; i++) { c.innerHTML += `<div class="bg-app-surface p-3 rounded-xl border border-white/5 flex items-center gap-3"><div class="bg-app-js/20 size-8 rounded-lg text-app-js font-black flex items-center justify-center">${i+1}</div><input type="text" id="p-in-js-${i}" oninput="state.tempPlayerNames[${i}].value" class="w-full bg-transparent border-none text-white px-0" placeholder="Name"></div>`; } switchScreen(8); }
+        function renderJSSavedPlayers() { document.getElementById('js-saved-players-container').innerHTML = state.savedPlayers.map((p,i)=>`<div class="relative flex flex-col items-center shrink-0 mt-2 group"><div onclick="quickAdd('${p}')" class="size-12 rounded-full border border-app-js/40 bg-app-surface-light flex items-center justify-center font-bold text-white">${p[0].toUpperCase()}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${p}</span></div>`).join(''); }
+        function generateJSBracket() { let p = [...state.tempPlayerNames].slice(0, state.js.count); for(let i=p.length-1; i>0; i--){ let j=Math.floor(Math.random()*(i+1)); [p[i],p[j]]=[p[j],p[i]]; } let rounds = Math.log2(state.js.count); state.js.bracket = []; for(let r=0; r<rounds; r++){ let mCount = state.js.count/Math.pow(2, r+1); let rnd = []; for(let m=0; m<mCount; m++) rnd.push({ id: `r${r}m${m}`, p1: r===0?p[m*2]:null, p2: r===0?p[m*2+1]:null, winner: null, ready1: false, ready2: false }); state.js.bracket.push(rnd); } state.js.currentViewRound=0; saveData(); }
+        function renderJSBracket() { const tabs = document.getElementById('js-tabs'); const mCont = document.getElementById('js-matches'); tabs.innerHTML = state.js.bracket.map((r,i) => `<button onclick="state.js.currentViewRound=${i};renderJSBracket()" class="shrink-0 px-4 py-2 rounded-full text-xs font-bold ${i===state.js.currentViewRound?'bg-app-js text-black':'bg-app-surface text-slate-400'}">Round ${i+1}</button>`).join(''); mCont.innerHTML = state.js.bracket[state.js.currentViewRound].map((m, mI) => `<div onclick="openJSMatchModal(${state.js.currentViewRound},${mI})" class="relative bg-app-surface border border-white/5 rounded-2xl p-4 flex justify-between items-center shadow-lg ${m.p1&&m.p2&&!m.winner?'cursor-pointer border-app-js/30':'opacity-60'}"><span class="w-2/5 truncate ${m.winner===m.p1?'text-app-js font-black':'text-white'}">${m.p1||'TBD'}</span><span class="text-[10px] text-slate-500">VS</span><span class="w-2/5 truncate ${m.winner===m.p2?'text-app-js font-black text-right':'text-white text-right'}">${m.p2||'TBD'}</span></div>`).join(''); }
+        function openJSMatchModal(r, mIdx) { currentJSModalMatch = {r, m:mIdx}; const m = state.js.bracket[r][mIdx]; if(!m.p1 || !m.p2 || m.winner) return; const c = document.getElementById('js-modal-content'); if(!m.ready1 || !m.ready2) { c.innerHTML = `<h3 class="font-black text-xl text-app-js mb-4">Draft Phase</h3><button onclick="toggleJSReady(${r},${mIdx},1)" class="w-full py-4 mb-3 rounded-xl border-2 ${m.ready1?'bg-green-500 border-green-400':'bg-white/5 border-white/10'} font-bold">${m.p1}</button><button onclick="toggleJSReady(${r},${mIdx},2)" class="w-full py-4 rounded-xl border-2 ${m.ready2?'bg-green-500 border-green-400':'bg-white/5 border-white/10'} font-bold">${m.p2}</button>`; } else { c.innerHTML = `<h3 class="font-black text-xl text-app-js mb-4">Winner?</h3><button onclick="setJSWinner(${r},${mIdx},'${m.p1}')" class="w-full py-4 mb-3 bg-white/5 rounded-xl font-bold">${m.p1}</button><button onclick="setJSWinner(${r},${mIdx},'${m.p2}')" class="w-full py-4 bg-white/5 rounded-xl font-bold">${m.p2}</button>`; } document.getElementById('js-match-modal').classList.remove('hidden'); }
+        function toggleJSReady(r, mI, pN) { if(pN===1) state.js.bracket[r][mI].ready1 = !state.js.bracket[r][mI].ready1; else state.js.bracket[r][mI].ready2 = !state.js.bracket[r][mI].ready2; saveData(); openJSMatchModal(r, mI); renderJSBracket(); }
+        function closeJSModal() { currentJSModalMatch = null; document.getElementById('js-match-modal').classList.add('hidden'); }
+        function setJSWinner(r, mI, w) { const m = state.js.bracket[r][mI]; m.winner = w; state.js.lastWinnerLog.push({r, m:mI}); if(r < state.js.bracket.length-1) { let nI = Math.floor(mI/2); let sl = mI%2===0?'p1':'p2'; state.js.bracket[r+1][nI][sl] = w; state.js.currentViewRound = r+1; } else { closeJSModal(); showJSUltimateWinner(w); return; } saveData(); closeJSModal(); renderJSBracket(); }
+        function revertJSWinner() { if(state.js.lastWinnerLog.length===0) return; let last = state.js.lastWinnerLog.pop(); let m = state.js.bracket[last.r][last.m]; if(last.r < state.js.bracket.length-1) state.js.bracket[last.r+1][Math.floor(last.m/2)][last.m%2===0?'p1':'p2'] = null; m.winner=null; state.js.currentViewRound=last.r; saveData(); renderJSBracket(); }
+        
+        // UI DE VICTORIA JUMPSTART REPARADA
+        function showJSUltimateWinner(w) { 
+            playTransition(GIFS.WINNER, 2700, () => { 
+                state.matchFinished=true; 
+                const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
+                try { if (typeof confetti === 'function') { confetti({ particleCount: 300, spread: 150, origin: { y: 0.5 }, colors: ['#facc15', '#f59e0b', '#ef4444'], zIndex: 1000 }); } } catch (e) {}
+                state.history.unshift({ date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), pairings:[], winner:w, mode:'Jumpstart' }); 
+                saveData(); 
+                renderHistory();
+                document.getElementById('screen-6').innerHTML = `
+                    <div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full">
+                        <div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-app-js drop-shadow-[0_0_25px_rgba(245,158,11,0.6)]">emoji_events</span></div>
+                        <h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${w}</h2>
+                        <h3 class="text-xl font-bold text-slate-300 mb-8 bg-app-js/20 px-4 py-1 rounded-full border border-app-js/50 uppercase text-app-js tracking-widest">Jumpstart Champion</h3>
+                        <div class="bg-app-surface p-6 rounded-2xl border border-white/5 shadow-lg mb-10 w-full max-w-sm"><p class="text-slate-200 italic text-lg leading-relaxed">"${quote}"</p></div>
+                        <button onclick="startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button>
+                    </div>`; 
+                switchScreen(6); 
+            }); 
+        }
+        
+        let currentJSModalMatch = null;
+    </script>
+</body>
+</html>
