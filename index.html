@@ -94,21 +94,28 @@
         <div class="fixed inset-0 z-40 bg-black overflow-hidden pointer-events-auto">
             <div id="battlefield-grid" class="bf-grid"></div>
             
-            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 flex items-center justify-center">
-                <button id="center-menu-btn" onclick="toggleCenterMenu()" class="size-16 bg-app-surface border-2 border-white/20 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.8)] flex items-center justify-center text-white font-black text-xl active:scale-90 transition-transform backdrop-blur-md"><span class="material-symbols-outlined text-3xl">apps</span></button>
+            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[60] flex items-center justify-center">
+                <button id="center-menu-btn" onclick="toggleCenterMenu()" class="size-16 bg-app-surface border border-white/20 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.8)] flex items-center justify-center text-white font-black text-xl active:scale-90 transition-transform backdrop-blur-md relative z-[60]"><span class="material-symbols-outlined text-3xl transition-transform duration-300" id="center-menu-icon">apps</span></button>
             </div>
             
-            <div id="match-menu-modal" class="absolute inset-0 z-[60] bg-black/85 hidden flex-col items-center justify-center p-6 backdrop-blur-md transition-opacity">
-                <h3 class="font-black text-3xl mb-8 text-center text-white tracking-widest uppercase">Match Menu</h3>
-                <div class="grid grid-cols-2 gap-4 w-full max-w-sm">
-                    <button onclick="window.undoLastAction()" class="bg-emerald-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">undo</span><span class="text-[10px] font-bold uppercase tracking-wider">Undo</span></button>
-                    <button onclick="rollD20All()" class="bg-blue-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">casino</span><span class="text-[10px] font-bold uppercase tracking-wider">Roll D20</span></button>
-                    <button onclick="resetLife()" class="bg-yellow-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">refresh</span><span class="text-[10px] font-bold uppercase tracking-wider">Reset Life</span></button>
-                    <button onclick="toggleFullScreen()" class="bg-indigo-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">fullscreen</span><span class="text-[10px] font-bold uppercase tracking-wider">Fullscreen</span></button>
-                    <button id="layout-toggle-btn" onclick="toggleLayout()" class="col-span-2 bg-purple-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex-col items-center justify-center gap-2 hidden"><span class="material-symbols-outlined text-3xl">dashboard</span><span class="text-[10px] font-bold uppercase tracking-wider">Change Layout</span></button>
-                    <button onclick="endMatchManual()" class="col-span-2 bg-red-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">flag</span><span class="text-[10px] font-bold uppercase tracking-wider">End Match</span></button>
+            <div id="match-menu-options" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[calc(50%+4.5rem)] z-[55] transition-all duration-300 opacity-0 pointer-events-none scale-75 origin-bottom flex flex-col items-center">
+                <div class="bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl p-3 shadow-[0_15px_50px_rgba(0,0,0,0.9)] flex flex-wrap justify-center gap-2 w-[220px]">
+                    <button onclick="window.undoLastAction()" class="flex flex-col items-center justify-center w-[95px] py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition active:scale-90 text-emerald-400">
+                        <span class="material-symbols-outlined text-2xl mb-1">undo</span><span class="text-[9px] font-bold uppercase tracking-wider">Undo</span>
+                    </button>
+                    <button onclick="rollD20All()" class="flex flex-col items-center justify-center w-[95px] py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition active:scale-90 text-blue-400">
+                        <span class="material-symbols-outlined text-2xl mb-1">casino</span><span class="text-[9px] font-bold uppercase tracking-wider">D20</span>
+                    </button>
+                    <button onclick="resetLife()" class="flex flex-col items-center justify-center w-[95px] py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition active:scale-90 text-yellow-400">
+                        <span class="material-symbols-outlined text-2xl mb-1">refresh</span><span class="text-[9px] font-bold uppercase tracking-wider">Reset</span>
+                    </button>
+                    <button id="layout-toggle-btn" onclick="toggleLayout()" class="flex flex-col items-center justify-center w-[95px] py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition active:scale-90 text-purple-400 hidden">
+                        <span class="material-symbols-outlined text-2xl mb-1">dashboard</span><span class="text-[9px] font-bold uppercase tracking-wider">Layout</span>
+                    </button>
+                    <button onclick="endMatchManual()" class="w-full mt-1 py-3 bg-red-500/20 border border-red-500/30 hover:bg-red-500/40 rounded-2xl transition active:scale-90 text-red-400 flex flex-col items-center justify-center">
+                        <span class="material-symbols-outlined text-xl mb-0.5">flag</span><span class="text-[9px] font-bold uppercase tracking-wider">End Match</span>
+                    </button>
                 </div>
-                <button onclick="toggleCenterMenu()" class="mt-8 size-14 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition"><span class="material-symbols-outlined">close</span></button>
             </div>
 
             <div id="dice-modal" class="absolute inset-0 z-[70] bg-black/95 hidden flex flex-col items-center justify-center p-6 backdrop-blur-md"><h3 class="font-black text-3xl mb-8 text-center text-white tracking-widest uppercase">Rolling D20...</h3><div id="dice-container" class="w-full max-w-sm space-y-4 max-h-[80vh] overflow-y-auto no-scrollbar"></div></div>

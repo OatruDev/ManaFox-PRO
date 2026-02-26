@@ -44,27 +44,44 @@ function setupGlobalListeners() {
 
     const creditsBtn = document.getElementById('btn-show-credits');
     if (creditsBtn) {
-        // FIX: Eliminado el async/await que colgaba la promesa del modal custom
         creditsBtn.addEventListener('click', () => {
-            let msg = "Versión: v1.0.0 Modular (Offline PWA)\n\n- Arquitectura: ES Modules.\n- Nuevo Motor Veto (Bans/Locks) activado.\n- Transiciones SPA Instantáneas.";
+            let msg = "MANAFOX\n" +
+                      "Advanced MTG Companion • v1.4.0\n\n" +
+                      "• Engine: Modular Vanilla ES6\n" +
+                      "• Logic: WPN Official Swiss & Individual DMG\n" +
+                      "• Sync: Scryfall API Database v3\n\n" +
+                      "© 2026 Zorro Corp • Developed by OatruDev";
+
             let customHtml = `
-                <div class="flex flex-col w-full">
-                    <button id="btn-hard-reset" class="w-full mb-2 bg-red-900/20 border border-red-500/30 text-red-400 py-3 rounded-xl font-bold hover:bg-red-500 hover:text-white transition active:scale-95 text-xs flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[14px]">delete_forever</span> Borrar Memoria y Reiniciar App</button>
-                    <button onclick="document.getElementById('mf-modal').classList.add('opacity-0', 'pointer-events-none', 'scale-95');" class="w-full bg-app-primary text-white py-3 rounded-xl font-bold hover:bg-app-primary/80 transition active:scale-95 text-xs">Cerrar</button>
+                <div class="flex flex-col w-full gap-3 mt-2">
+                    <div class="flex flex-col gap-1 p-3 bg-white/5 rounded-xl border border-white/10 text-left">
+                        <span class="text-[8px] uppercase font-black text-slate-500 tracking-widest">System Health</span>
+                        <div class="flex items-center gap-2 text-green-400 text-[10px] font-bold">
+                            <span class="size-2 bg-green-500 rounded-full animate-pulse"></span>
+                            Local Database Optimized
+                        </div>
+                    </div>
+                    
+                    <button id="btn-hard-reset" class="w-full bg-red-950/30 border border-red-500/50 text-red-400 py-3 rounded-xl font-black hover:bg-red-500 hover:text-white transition active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-[16px]">warning</span> RESET
+                    </button>
+                    
+                    <button onclick="document.getElementById('mf-modal').classList.add('opacity-0', 'pointer-events-none', 'scale-95');" class="w-full bg-app-surface border border-white/10 text-white py-3 rounded-xl font-bold hover:bg-white/10 transition active:scale-95 text-xs uppercase tracking-widest">
+                        CLOSE
+                    </button>
                 </div>`;
-            
-            mfModal.show("ManaFox: Zorro Corp", msg, "help", "custom", customHtml);
-            
-            // Inyectamos el listener asíncronamente un instante después de renderizar
+
+            mfModal.show("Application Status", msg, "settings_suggest", "custom", customHtml);
+
             setTimeout(() => {
                 let resetBtn = document.getElementById('btn-hard-reset');
                 if(resetBtn) {
                     resetBtn.addEventListener('click', async () => {
-                        mfModal.hide(); // Ocultamos el actual
+                        mfModal.hide();
                         setTimeout(async () => {
-                            const confirm = await mfModal.show("Borrar todo", "¿Estás seguro? Esto borrará toda tu configuración.", "warning", "confirm");
+                            const confirm = await mfModal.show("Reset ManaFox", "Are you sure you want to reset everything?", "warning", "confirm");
                             if(confirm) resetLocalState();
-                        }, 350); // Esperamos la animación CSS
+                        }, 400);
                     });
                 }
             }, 50);

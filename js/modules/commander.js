@@ -100,15 +100,21 @@ function syncDecksToLibrary() {
     let allE = [...baseDecks, ...state.savedDecks]; 
     let nw = false; 
     state.deckData.forEach((d, i) => { 
-        if (d.name.trim() === "") {
-            d.name = `Deck ${i + 1}`;
-            const inputNode = document.getElementById(`deck-input-${i}`);
-            if(inputNode) inputNode.value = d.name;
+        // Extracción forzada desde el DOM para evitar que se guarden vacíos al presionar "Siguiente" rápido
+        const inputNode = document.getElementById(`deck-input-${i}`);
+        if (inputNode && inputNode.value !== undefined) {
+            d.name = inputNode.value.trim();
         }
-        let isUnique = !allE.some(ex => ex.name.toLowerCase() === d.name.trim().toLowerCase());
+        
+        if (d.name === "") {
+            d.name = `Deck ${i + 1}`;
+            if (inputNode) inputNode.value = d.name;
+        }
+        
+        let isUnique = !allE.some(ex => ex.name.toLowerCase() === d.name.toLowerCase());
         if (isUnique) { 
-            state.savedDecks.push({ name: esc(d.name.trim()), colors: [...d.colors] }); 
-            allE.push({ name: esc(d.name.trim()), colors: [...d.colors] });
+            state.savedDecks.push({ name: esc(d.name), colors: [...d.colors] }); 
+            allE.push({ name: esc(d.name), colors: [...d.colors] });
             nw = true; 
         } 
     }); 
@@ -262,7 +268,6 @@ function initBattlefield() {
     }); 
 }
 
-// FIX: Undo Stack Snapshot Engine
 function saveUndoState() {
     if (!state.undoStack) state.undoStack = [];
     state.undoStack.push(JSON.parse(JSON.stringify(state.currentMatch)));
@@ -281,9 +286,7 @@ let holdTimer = null; let holdInterval = null; let eliminationTimer = null;
 function handleTapStart(e, idx, amt) {
     if (e && e.cancelable) e.preventDefault(); 
     if (state.currentMatch[idx].isDead) return;
-    
-    saveUndoState(); // Snapshot before any changes occur
-    
+    saveUndoState();
     clearTimeout(holdTimer); clearInterval(holdInterval);
     changeLife(idx, amt);
     holdTimer = setTimeout(() => { holdInterval = setInterval(() => { changeLife(idx, amt * 5); }, 150); }, 400); 
@@ -326,14 +329,45 @@ function renderBattlefield() {
             if (count >= 4 && (i === 0 || i === 1)) rotDeg = 180; 
             if (count === 6 && i === 2) rotDeg = 180; 
         } 
+        
         let flexDir = 'flex-col'; let hitbox1 = '1'; let hitbox2 = '-1'; 
         if (rotDeg === 180) { hitbox1 = '-1'; hitbox2 = '1'; } 
         else if (rotDeg === 90) { flexDir = 'flex-row'; hitbox1 = '-1'; hitbox2 = '1'; } 
         else if (rotDeg === -90) { flexDir = 'flex-row'; hitbox1 = '1'; hitbox2 = '-1'; } 
+        
+        // FIX: Calculadora de límites para Cross Layout (Evita que el contenido se desborde al rotar)
+        let innerW = '100%'; let innerH = '100%';
+        if (count === 4 && state.layoutMode === 'cross' && (rotDeg === 90 || rotDeg === -90)) {
+            innerW = '40svh'; innerH = '50vw';
+        }
+
         let deadOverlay = p.isDead ? `<div class="absolute inset-0 bg-zinc-950/85 backdrop-grayscale z-30 flex flex-col items-center justify-center pointer-events-auto transition-all duration-500" style="transform: rotate(${rotDeg}deg)"><span class="material-symbols-outlined text-[24vmin] text-[#1e83f5] drop-shadow-[0_0_35px_rgba(30,131,245,0.8)]">skull</span><div class="mt-4 px-6 py-2 bg-[#1e83f5]/20 border border-[#1e83f5] text-white text-xs font-black tracking-widest uppercase rounded-full shadow-[0_0_15px_rgba(30,131,245,0.5)]">Eliminated</div><p class="text-slate-300 font-medium italic mt-4 text-center px-8 text-sm drop-shadow-md">"${esc(p.deathQuote)}"</p></div>` : ''; 
         let lifeUI = p.isDead ? '' : `<span id="life-display-${i}" class="text-[clamp(4rem,12vh,9rem)] font-black tracking-tighter leading-none text-white">${p.life}</span>`; 
-        let uiWrapper = `<div class="absolute inset-0 z-20 pointer-events-none" style="transform: rotate(${rotDeg}deg);"><div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full text-center transition-opacity ${p.isDead ? 'opacity-20' : ''}"><h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate">${esc(p.player)}</h3><p class="text-[12px] sm:text-sm font-bold text-white/90 truncate mb-1">${p.deck ? esc(p.deck.name) : ''}</p>${lifeUI}</div><div class="absolute bottom-4 left-0 w-full px-4 flex justify-between items-end ${p.isDead ? 'hidden' : ''}"><div class="flex gap-2 flex-wrap pointer-events-auto">${renderCmdrDamageIcons(p)}</div><button onclick="openCmdrModal(${i}, ${rotDeg})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto shadow-lg active:scale-95 transition-transform backdrop-blur-sm"><span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span></button></div></div>`;
-        grid.innerHTML += `<div class="relative w-full h-full flex flex-col justify-center items-center ${pos} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}"><div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}"><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox1})" ontouchstart="handleTapStart(event, ${i}, ${hitbox1})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none">${hitbox1 === '1' ? '+' : '-'}</span></div><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox2})" ontouchstart="handleTapStart(event, ${i}, ${hitbox2})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none">${hitbox2 === '1' ? '+' : '-'}</span></div></div>${uiWrapper}${deadOverlay}</div>`; 
+        
+        grid.innerHTML += `
+        <div class="relative w-full h-full flex flex-col justify-center items-center ${pos} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}">
+            <div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}">
+                <div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox1})" ontouchstart="handleTapStart(event, ${i}, ${hitbox1})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)">
+                    <span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox1 === '1' ? '+' : '-'}</span>
+                </div>
+                <div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox2})" ontouchstart="handleTapStart(event, ${i}, ${hitbox2})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)">
+                    <span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox2 === '1' ? '+' : '-'}</span>
+                </div>
+            </div>
+            
+            <div class="absolute inset-0 m-auto z-20 pointer-events-none flex flex-col justify-between transition-opacity ${p.isDead ? 'opacity-20' : ''}" style="width: ${innerW}; height: ${innerH}; transform: rotate(${rotDeg}deg);">
+                <div class="flex-1 flex flex-col justify-center items-center w-full text-center">
+                    <h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate w-full px-2">${esc(p.player)}</h3>
+                    <p class="text-[12px] sm:text-sm font-bold text-white/90 truncate mb-1 w-full px-2">${p.deck ? esc(p.deck.name) : ''}</p>
+                    ${lifeUI}
+                </div>
+                <div class="w-full px-4 pb-4 flex justify-between items-end ${p.isDead ? 'hidden' : ''}">
+                    <div class="flex gap-2 flex-wrap pointer-events-auto">${renderCmdrDamageIcons(p)}</div>
+                    <button onclick="openCmdrModal(${i}, ${rotDeg})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto shadow-lg active:scale-95 transition-transform backdrop-blur-sm shrink-0"><span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span></button>
+                </div>
+            </div>
+            ${deadOverlay}
+        </div>`; 
     }); 
 }
 
@@ -358,7 +392,7 @@ function toggleLayout() {
 let currentCmdrTarget = -1;
 function openCmdrModal(idx, rotDeg) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button onclick="changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button onclick="changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>` : '').join(''); const box = document.getElementById('cmdr-modal-box'); box.style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
 function changeCmdrDmg(tI, aI, v) { 
-    saveUndoState(); // Snapshot
+    saveUndoState();
     let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 20); 
 }
 function closeCmdrModal() { document.getElementById('cmdr-modal').classList.add('hidden'); }
@@ -393,12 +427,18 @@ async function checkEliminations() {
 
 let menuOpen = false;
 function toggleCenterMenu() { 
-    const m = document.getElementById('match-menu-modal');
-    if (m) {
-        if(m.classList.contains('hidden')) { 
-            m.classList.remove('hidden'); m.classList.add('flex'); menuOpen = true;
+    menuOpen = !menuOpen;
+    const menu = document.getElementById('match-menu-options');
+    const icon = document.getElementById('center-menu-icon');
+    if (menu) {
+        if(menuOpen) { 
+            menu.classList.remove('opacity-0', 'pointer-events-none', 'scale-75'); 
+            menu.classList.add('opacity-100', 'pointer-events-auto', 'scale-100'); 
+            icon.innerText = 'close'; icon.classList.add('rotate-90');
         } else { 
-            m.classList.add('hidden'); m.classList.remove('flex'); menuOpen = false;
+            menu.classList.add('opacity-0', 'pointer-events-none', 'scale-75'); 
+            menu.classList.remove('opacity-100', 'pointer-events-auto', 'scale-100'); 
+            icon.innerText = 'apps'; icon.classList.remove('rotate-90');
         }
     }
 }
