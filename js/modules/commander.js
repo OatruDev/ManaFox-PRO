@@ -7,24 +7,16 @@ import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme
 let wakeLock = null;
 
 async function requestWakeLock() {
-    try {
-        if ('wakeLock' in navigator) {
-            wakeLock = await navigator.wakeLock.request('screen');
-        }
-    } catch (err) { console.warn("Wake Lock error:", err); }
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
+    catch (err) { console.warn("Wake Lock error:", err); }
 }
 
 function releaseWakeLock() {
-    if (wakeLock !== null) { 
-        wakeLock.release(); 
-        wakeLock = null; 
-    }
+    if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }
 }
 
 document.addEventListener('visibilitychange', async () => {
-    if (wakeLock !== null && document.visibilityState === 'visible' && state.step === 5) { 
-        await requestWakeLock(); 
-    }
+    if (wakeLock !== null && document.visibilityState === 'visible' && state.step === 5) await requestWakeLock(); 
 });
 
 export function initCommander() {
@@ -35,7 +27,7 @@ export function initCommander() {
     else if (state.step === 3) goToPlayers();
     else if (state.step === 4) buildResultsDOM();
     else if (state.step === 5 && state.currentMatch.length > 0) renderBattlefield();
-    else if (state.step === 6) goToScreen6Manual();
+    else if (state.step === 6) window.goToScreen6Manual();
     
     if (state.step < 5) renderHistory();
 }
@@ -85,10 +77,16 @@ function buildDeckDOM() {
                     <button onclick="window.removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button>
                 </div>
             </div>
-            <input type="text" id="deck-input-${i}" maxlength="40" oninput="state.deckData[${i}].name=this.value; saveData();" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white" value="${esc(d.name)}" placeholder="Name">
+            <input type="text" id="deck-input-${i}" maxlength="40" oninput="window.updateDeckName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white" value="${esc(d.name)}" placeholder="Name">
             <div class="flex gap-2">${colorsHTML}</div>
         </div>`; 
     }); 
+}
+
+// FIX: Función expuesta para inyectar cada letra directo en la memoria
+window.updateDeckName = function(i, val) {
+    state.deckData[i].name = val;
+    saveData();
 }
 
 function loadDeck(di, li) { const d = [...baseDecks, ...state.savedDecks][li]; state.deckData[di] = { name: d.name, colors: [...d.colors] }; buildDeckDOM(); saveData(); }
@@ -100,9 +98,11 @@ function syncDecksToLibrary() {
     let allE = [...baseDecks, ...state.savedDecks]; 
     let nw = false; 
     state.deckData.forEach((d, i) => { 
+        if (!d.name || d.name.trim() === "") d.name = `Deck ${i + 1}`; 
+        else d.name = d.name.trim();
+        
         const inputNode = document.getElementById(`deck-input-${i}`);
-        if (inputNode && inputNode.value !== undefined) { d.name = inputNode.value.trim(); }
-        if (d.name === "") { d.name = `Deck ${i + 1}`; if (inputNode) inputNode.value = d.name; }
+        if (inputNode && inputNode.value !== d.name) inputNode.value = d.name;
         
         let isUnique = !allE.some(ex => ex.name.toLowerCase() === d.name.toLowerCase());
         if (isUnique) { 
@@ -173,7 +173,6 @@ function goToPlayers() {
     const c = document.getElementById('player-inputs-container'); c.innerHTML = ''; 
     if (state.savedPlayers.length > 0) { document.getElementById('saved-players-section').classList.remove('hidden'); renderSavedPlayers(); } 
     
-    // FIX: Utilizamos el OrigIdx en todo el mapeo para que nunca colisionen los Selects
     let validD = state.deckData.map((d, i) => ({ ...d, origIdx: i })).filter(d => d.name.trim() !== "");
     let maxBans = Math.max(0, validD.length - 2);
     if (!state.playerBans) state.playerBans = [];
@@ -337,9 +336,13 @@ function renderBattlefield() {
             if (count === 6 && i === 2) rotDeg = 180; 
         } 
         
-        let flexDir = 'flex-col'; let hitbox1 = '-1'; let hitbox2 = '1'; 
-        if (rotDeg === 180) { hitbox1 = '1'; hitbox2 = '-1'; } 
-        else if (rotDeg === -90) { hitbox1 = '1'; hitbox2 = '-1'; } 
+        // FIX: Mapping absoluto. Independientemente de cómo estés sentado, 
+        // el TOP (centro de mesa) es el +, el BOTTOM (tu borde) es el -.
+        let flexDir = 'flex-col'; let hitbox1 = '1'; let hitbox2 = '-1'; 
+        if (rotDeg === 0) { flexDir = 'flex-col'; hitbox1 = '1'; hitbox2 = '-1'; }
+        else if (rotDeg === 180) { flexDir = 'flex-col'; hitbox1 = '-1'; hitbox2 = '1'; }
+        else if (rotDeg === 90) { flexDir = 'flex-row'; hitbox1 = '-1'; hitbox2 = '1'; }
+        else if (rotDeg === -90) { flexDir = 'flex-row'; hitbox1 = '1'; hitbox2 = '-1'; }
         
         let innerW = '100%'; let innerH = '100%';
         if (count === 4 && state.layoutMode === 'cross' && (rotDeg === 90 || rotDeg === -90)) {
@@ -431,6 +434,8 @@ async function checkEliminations() {
 }
 
 let menuOpen = false;
+
+// FIX: Expansor Matemático para el Menú Lotus
 window.toggleCenterMenu = function() { 
     menuOpen = !menuOpen;
     const menu = document.getElementById('radial-menu-overlay');
@@ -439,9 +444,32 @@ window.toggleCenterMenu = function() {
         if(menuOpen) { 
             menu.classList.add('active'); 
             icon.innerText = 'close'; icon.classList.add('rotate-90');
+            
+            const btns = Array.from(menu.querySelectorAll('.radial-btn:not(.hidden)'));
+            const R = 95; // Radio de expansión
+            const startAngle = -Math.PI / 2; // -90 grados (Posición Top)
+            const angleStep = (Math.PI * 2) / btns.length;
+            
+            btns.forEach((btn, index) => {
+                const angle = startAngle + index * angleStep;
+                const x = Math.round(Math.cos(angle) * R);
+                const y = Math.round(Math.sin(angle) * R);
+                btn.style.transform = `translate(${x}px, ${y}px) scale(1)`;
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+                btn.style.transitionDelay = `${index * 0.05}s`;
+            });
         } else { 
             menu.classList.remove('active'); 
             icon.innerText = 'apps'; icon.classList.remove('rotate-90');
+            
+            const btns = Array.from(menu.querySelectorAll('.radial-btn'));
+            btns.forEach(btn => {
+                btn.style.transform = `translate(0px, 0px) scale(0.3)`;
+                btn.style.opacity = '0';
+                btn.style.pointerEvents = 'none';
+                btn.style.transitionDelay = '0s';
+            });
         }
     }
 }
@@ -488,7 +516,6 @@ window.applyDandLPreset = applyDandLPreset;
 window.applyDJLPreset = applyDJLPreset;
 window.openLibraryManager = openLibraryManager;
 window.closeLibraryManager = closeLibraryManager;
-window.deleteSavedDeck = deleteSavedDeck;
 window.addExtraDeck = addExtraDeck;
 window.loadDeck = loadDeck;
 window.toggleColor = toggleColor;
@@ -496,7 +523,6 @@ window.removeDeck = removeDeck;
 window.addExtraPlayer = addExtraPlayer;
 window.removePlayer = removePlayer;
 window.quickAdd = quickAdd;
-window.deleteSavedPlayer = deleteSavedPlayer;
 window.setPlayerLock = setPlayerLock;
 window.toggleBan = toggleBan;
 window.reassignDecks = reassignDecks;
