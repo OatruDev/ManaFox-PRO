@@ -59,7 +59,7 @@ function goToJSPlayers() {
 function renderJSSavedPlayers() {
     const c = document.getElementById('js-saved-players-container');
     if(!c) return;
-    c.innerHTML = state.savedPlayers.map((p,i)=>`<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="quickAddJS('${esc(p)}')" class="setup-input size-12 rounded-full border border-app-js/40 bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-js/20">${esc(p[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(p)}</span></div>`).join('');
+    c.innerHTML = state.savedPlayers.map((p,i)=>`<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAddJS('${esc(p)}')" class="setup-input size-12 rounded-full border border-app-js/40 bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-js/20">${esc(p[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(p)}</span></div>`).join('');
 }
 
 function quickAddJS(n) {
@@ -73,7 +73,6 @@ function quickAddJS(n) {
 function generateJSSwiss() {
     let names = [...state.tempPlayerNames].slice(0, state.js.count);
     for (let i = names.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [names[i], names[j]] = [names[j], names[i]]; }
-    // FIX: Agregamos el array 'defeated' para el motor de desempate Head-to-Head
     state.js.players = names.map(n => ({ name: n, points: 0, played: [], defeated: [] }));
     state.js.totalRounds = Math.log2(state.js.count); state.js.rounds = []; state.js.currentRound = 0; state.js.currentView = 'round';
     let r1 = []; for(let i=0; i<state.js.count; i+=2) { r1.push({ p1: state.js.players[i].name, p2: state.js.players[i+1].name, winner: null, ready1: false, ready2: false }); }
@@ -95,10 +94,24 @@ function generateNextSwissRound() {
 
 function setJSView(view) { state.js.currentView = view; renderJSSwiss(); saveData(); }
 
+// FIX: Función de etiquetado de Desempate Head-to-Head
+function assignTieBreakers(sortedPlayers) {
+    for(let i = 0; i < sortedPlayers.length; i++) {
+        sortedPlayers[i].tieReason = null;
+        let tiedWith = sortedPlayers.filter((p, idx) => idx !== i && p.points === sortedPlayers[i].points);
+        if (tiedWith.length > 0) {
+            let defeatedNames = tiedWith.filter(t => sortedPlayers[i].defeated && sortedPlayers[i].defeated.includes(t.name)).map(t => t.name);
+            if (defeatedNames.length > 0) {
+                sortedPlayers[i].tieReason = `Head-to-Head win vs ${defeatedNames.join(', ')}`;
+            }
+        }
+    }
+}
+
 function renderJSSwiss() {
     const tabs = document.getElementById('js-tabs'); const mCont = document.getElementById('js-matches');
     if(!tabs || !mCont) return;
-    tabs.innerHTML = `<button onclick="setJSView('round')" class="flex-1 py-3 rounded-xl font-bold transition-all ${state.js.currentView==='round' ? 'bg-app-js text-black shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-app-surface border border-white/10 text-slate-400'}">Round ${state.js.currentRound + 1}</button><button onclick="setJSView('standings')" class="flex-1 py-3 rounded-xl font-bold transition-all ${state.js.currentView==='standings' ? 'bg-app-js text-black shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-app-surface border border-white/10 text-slate-400'}">Standings</button>`;
+    tabs.innerHTML = `<button onclick="window.setJSView('round')" class="flex-1 py-3 rounded-xl font-bold transition-all ${state.js.currentView==='round' ? 'bg-app-js text-black shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-app-surface border border-white/10 text-slate-400'}">Round ${state.js.currentRound + 1}</button><button onclick="window.setJSView('standings')" class="flex-1 py-3 rounded-xl font-bold transition-all ${state.js.currentView==='standings' ? 'bg-app-js text-black shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-app-surface border border-white/10 text-slate-400'}">Standings</button>`;
     if (state.js.currentView === 'standings') {
         let sorted = [...state.js.players].sort((a,b) => {
             if (b.points !== a.points) return b.points - a.points;
@@ -108,7 +121,12 @@ function renderJSSwiss() {
             if (bDefeatedA) return 1;
             return 0;
         });
-        mCont.innerHTML = sorted.map((p, i) => `<div class="flex justify-between items-center bg-app-surface p-4 rounded-xl border border-white/5 mb-2"><div class="flex items-center gap-3"><span class="font-black text-xl ${i===0 ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-500'}">#${i+1}</span><span class="font-bold text-white">${esc(p.name)}</span></div><span class="font-black text-app-js">${p.points} PTS</span></div>`).join(''); return;
+        assignTieBreakers(sorted);
+        mCont.innerHTML = sorted.map((p, i) => {
+            let tieBadge = p.tieReason ? `<p class="text-[9px] text-app-js uppercase tracking-widest mt-1 font-bold flex items-center gap-1"><span class="material-symbols-outlined text-[10px]">handshake</span> Tie-breaker: ${p.tieReason}</p>` : '';
+            return `<div class="flex justify-between items-center bg-app-surface p-4 rounded-xl border border-white/5 mb-2"><div class="flex flex-col"><div class="flex items-center gap-3"><span class="font-black text-xl ${i===0 ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-500'}">#${i+1}</span><span class="font-bold text-white text-lg">${esc(p.name)}</span></div>${tieBadge}</div><span class="font-black text-app-js text-xl">${p.points} PTS</span></div>`;
+        }).join(''); 
+        return;
     }
     let currentMatches = state.js.rounds[state.js.currentRound]; let allFinished = true;
     mCont.innerHTML = currentMatches.map((match, mIdx) => {
@@ -119,19 +137,19 @@ function renderJSSwiss() {
         if(isFinished) statusBadge = `<div class="absolute top-0 right-0 bg-app-js text-black text-[8px] font-black px-2 py-0.5 rounded-bl-lg rounded-tr-xl uppercase">Done</div>`;
         else if(match.ready1 && match.ready2) statusBadge = `<div class="absolute top-0 right-0 bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-bl-lg rounded-tr-xl uppercase animate-pulse">Fight!</div>`;
         else statusBadge = `<div class="absolute top-0 right-0 bg-blue-500 text-white text-[8px] font-black px-2 py-0.5 rounded-bl-lg rounded-tr-xl uppercase">Draft Phase</div>`;
-        return `<div onclick="${isFinished ? '' : `openJSMatchModal(${state.js.currentRound}, ${mIdx})`}" class="js-match-card relative bg-app-surface border border-white/5 rounded-2xl p-4 flex flex-col justify-center shadow-lg ${!isFinished ? 'cursor-pointer hover:border-app-js/50 hover:bg-app-surface-light transition-colors' : 'opacity-70'} mb-4">${statusBadge}<div class="flex justify-between items-center w-full"><span class="w-2/5 text-right truncate ${p1Class}">${esc(match.p1)}</span><div class="w-1/5 flex justify-center"><span class="text-[10px] font-black text-slate-500 bg-app-surface-light px-2 py-1 rounded-full border border-white/5">VS</span></div><span class="w-2/5 text-left truncate ${p2Class}">${esc(match.p2)}</span></div></div>`;
+        return `<div onclick="${isFinished ? '' : `window.openJSMatchModal(${state.js.currentRound}, ${mIdx})`}" class="js-match-card relative bg-app-surface border border-white/5 rounded-2xl p-4 flex flex-col justify-center shadow-lg ${!isFinished ? 'cursor-pointer hover:border-app-js/50 hover:bg-app-surface-light transition-colors' : 'opacity-70'} mb-4">${statusBadge}<div class="flex justify-between items-center w-full"><span class="w-2/5 text-right truncate ${p1Class}">${esc(match.p1)}</span><div class="w-1/5 flex justify-center"><span class="text-[10px] font-black text-slate-500 bg-app-surface-light px-2 py-1 rounded-full border border-white/5">VS</span></div><span class="w-2/5 text-left truncate ${p2Class}">${esc(match.p2)}</span></div></div>`;
     }).join('');
     if (allFinished) {
         let isLastRound = state.js.currentRound === state.js.totalRounds - 1;
         let btnText = isLastRound ? "Crown Champion" : "Generate Next Round";
-        let btnAction = isLastRound ? "finishSwiss()" : "generateNextSwissRound()";
+        let btnAction = isLastRound ? "window.finishSwiss()" : "window.generateNextSwissRound()";
         let btnColor = isLastRound ? "bg-yellow-500 text-black shadow-[0_0_15px_rgba(250,204,21,0.4)]" : "bg-app-js text-black shadow-[0_0_15px_rgba(245,158,11,0.4)]";
         let icon = isLastRound ? "emoji_events" : "arrow_forward";
         mCont.innerHTML += `<button onclick="${btnAction}" class="w-full mt-4 py-4 rounded-xl font-black text-lg transition-transform active:scale-95 flex justify-center items-center gap-2 ${btnColor}">${btnText} <span class="material-symbols-outlined">${icon}</span></button>`;
     }
 }
 
-function openJSMatchModal(r, mIdx) { const match = state.js.rounds[r][mIdx]; const content = document.getElementById('js-modal-content'); if (!match.ready1 || !match.ready2) { content.innerHTML = `<h3 class="font-black text-2xl text-white tracking-widest uppercase mb-1 drop-shadow-md">Draft Phase</h3><p class="text-sm text-slate-300 mb-6">Grab 2 new packs and shuffle!<br>Both players must confirm.</p><div class="flex flex-col gap-4"><button onclick="toggleJSReady(${r}, ${mIdx}, 1)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready1 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p1)}</span><span class="material-symbols-outlined">${match.ready1 ? 'check_circle' : 'hourglass_empty'}</span></button><button onclick="toggleJSReady(${r}, ${mIdx}, 2)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready2 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p2)}</span><span class="material-symbols-outlined">${match.ready2 ? 'check_circle' : 'hourglass_empty'}</span></button></div>`; } else { content.innerHTML = `<h3 class="font-black text-2xl text-red-500 tracking-widest uppercase mb-1 drop-shadow-md animate-pulse">Declare Winner</h3><p class="text-sm text-slate-300 mb-6">Who survived the combat?</p><div class="flex gap-3"><button onclick="setJSWinner(${r}, ${mIdx}, '${esc(match.p1)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p1)}</span></button><button onclick="setJSWinner(${r}, ${mIdx}, '${esc(match.p2)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p2)}</span></button></div>`; } document.getElementById('js-match-modal').classList.remove('hidden'); }
+function openJSMatchModal(r, mIdx) { const match = state.js.rounds[r][mIdx]; const content = document.getElementById('js-modal-content'); if (!match.ready1 || !match.ready2) { content.innerHTML = `<h3 class="font-black text-2xl text-white tracking-widest uppercase mb-1 drop-shadow-md">Draft Phase</h3><p class="text-sm text-slate-300 mb-6">Grab 2 new packs and shuffle!<br>Both players must confirm.</p><div class="flex flex-col gap-4"><button onclick="window.toggleJSReady(${r}, ${mIdx}, 1)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready1 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p1)}</span><span class="material-symbols-outlined">${match.ready1 ? 'check_circle' : 'hourglass_empty'}</span></button><button onclick="window.toggleJSReady(${r}, ${mIdx}, 2)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready2 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p2)}</span><span class="material-symbols-outlined">${match.ready2 ? 'check_circle' : 'hourglass_empty'}</span></button></div>`; } else { content.innerHTML = `<h3 class="font-black text-2xl text-red-500 tracking-widest uppercase mb-1 drop-shadow-md animate-pulse">Declare Winner</h3><p class="text-sm text-slate-300 mb-6">Who survived the combat?</p><div class="flex gap-3"><button onclick="window.setJSWinner(${r}, ${mIdx}, '${esc(match.p1)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p1)}</span></button><button onclick="window.setJSWinner(${r}, ${mIdx}, '${esc(match.p2)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p2)}</span></button></div>`; } document.getElementById('js-match-modal').classList.remove('hidden'); }
 function toggleJSReady(r, mI, pN) { if(pN===1) state.js.rounds[r][mI].ready1 = !state.js.rounds[r][mI].ready1; else state.js.rounds[r][mI].ready2 = !state.js.rounds[r][mI].ready2; saveData(); openJSMatchModal(r, mI); renderJSSwiss(); }
 function closeJSModal() { document.getElementById('js-match-modal').classList.add('hidden'); }
 
@@ -142,8 +160,6 @@ function setJSWinner(r, m, winnerName) {
     let p2 = state.js.players.find(p => p.name === match.p2); 
     p1.played.push(p2.name); 
     p2.played.push(p1.name); 
-    
-    // FIX: Guardamos el nombre del perdedor en el array del ganador para Head-to-Head
     let w = state.js.players.find(p => p.name === winnerName); 
     let loserName = match.p1 === winnerName ? match.p2 : match.p1;
     if(!w.defeated) w.defeated = [];
@@ -158,14 +174,11 @@ function revertJSSwissWinner() {
     if (!lastMatch) return mfModal.show("Hold Up", "No matches to undo.", "warning"); 
     let w = state.js.players.find(p => p.name === lastMatch.winner); 
     w.points -= 3; 
-    
-    // FIX: Removemos al oponente de la lista de derrotados al hacer Undo
     let loserName = lastMatch.p1 === lastMatch.winner ? lastMatch.p2 : lastMatch.p1;
     if(w.defeated) {
         let idx = w.defeated.indexOf(loserName);
         if(idx > -1) w.defeated.splice(idx, 1);
     }
-    
     let p1 = state.js.players.find(p => p.name === lastMatch.p1); 
     let p2 = state.js.players.find(p => p.name === lastMatch.p2); 
     p1.played.pop(); p2.played.pop(); 
@@ -174,7 +187,6 @@ function revertJSSwissWinner() {
 }
 
 function finishSwiss() { 
-    // FIX: Nuevo Motor de Desempate (Points > Head-to-Head)
     let sorted = [...state.js.players].sort((a,b) => {
         if (b.points !== a.points) return b.points - a.points;
         let aDefeatedB = a.defeated && a.defeated.includes(b.name);
@@ -196,10 +208,13 @@ function showJSUltimateWinner(sortedPlayers) {
         state.history.unshift({ date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), pairings:[], winner:w, mode:'Jumpstart', podium: podiumLog });
         try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } catch(e) {}
         
+        assignTieBreakers(sortedPlayers);
+        
         let rankingsHTML = sortedPlayers.map((p,i) => {
             let medal = i===0 ? '🏆' : (i===1 ? '🥈' : (i===2 ? '🥉' : ''));
             let color = i===0 ? 'text-yellow-400' : (i===1 ? 'text-slate-300' : (i===2 ? 'text-amber-600' : 'text-slate-500'));
-            return `<div class="flex justify-between items-center bg-app-surface-light border border-white/5 p-3 rounded-xl mb-2"><span class="font-bold ${color}">${medal} #${i+1} ${esc(p.name)}</span><span class="text-xs font-black text-app-js">${p.points} PTS</span></div>`;
+            let tieBadge = p.tieReason ? `<span class="text-[8px] text-app-js uppercase font-bold tracking-widest block mt-0.5"><span class="material-symbols-outlined text-[8px] align-middle">handshake</span> ${p.tieReason}</span>` : '';
+            return `<div class="flex justify-between items-center bg-app-surface-light border border-white/5 p-3 rounded-xl mb-2"><div class="flex flex-col"><span class="font-bold ${color}">${medal} #${i+1} ${esc(p.name)}</span>${tieBadge}</div><span class="text-xs font-black text-app-js">${p.points} PTS</span></div>`;
         }).join('');
         document.getElementById('screen-6').innerHTML = `<div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full"><div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[70px] text-app-js drop-shadow-[0_0_25px_rgba(245,158,11,0.6)]">emoji_events</span></div><h2 class="text-4xl font-black text-white uppercase tracking-widest mb-1">${esc(w)}</h2><h3 class="text-[10px] font-bold text-slate-400 mb-6 bg-app-js/20 px-3 py-1 rounded-full border border-app-js/50 uppercase text-app-js tracking-widest">Jumpstart Champion</h3><div class="w-full max-w-sm text-left mb-6"><h4 class="text-[10px] uppercase font-bold text-slate-500 mb-3 tracking-widest">Final Standings</h4>${rankingsHTML}</div><button onclick="window.startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button></div>`;
         switchScreen(6);

@@ -72,7 +72,7 @@ function buildDeckDOM() {
     const lib = [...baseDecks, ...state.savedDecks]; 
     state.deckData.forEach((d, i) => { 
         const archName = getArchetype(d.colors);
-        const colorsHTML = state.manaColors.map(m => `<button onclick="toggleColor(${i},'${m.id}')" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id) ? 'active' : 'opacity-30'}">${m.icon}</button>`).join(''); 
+        const colorsHTML = state.manaColors.map(m => `<button onclick="window.toggleColor(${i},'${m.id}')" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id) ? 'active' : 'opacity-30'}">${m.icon}</button>`).join(''); 
         c.innerHTML += `
         <div class="bg-app-surface p-4 rounded-2xl border border-white/5 shadow-sm">
             <div class="flex justify-between items-center mb-2">
@@ -81,8 +81,8 @@ function buildDeckDOM() {
                     <span class="text-[11px] font-black text-white bg-white/10 px-2 py-0.5 rounded-md mt-1 uppercase tracking-wider">${archName}</span>
                 </div>
                 <div class="flex gap-2">
-                    <select onchange="loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name)}</option>`).join('')}</select>
-                    <button onclick="removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button>
+                    <select onchange="window.loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name)}</option>`).join('')}</select>
+                    <button onclick="window.removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button>
                 </div>
             </div>
             <input type="text" id="deck-input-${i}" maxlength="40" oninput="state.deckData[${i}].name=this.value; saveData();" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white" value="${esc(d.name)}" placeholder="Name">
@@ -106,7 +106,6 @@ function syncDecksToLibrary() {
         
         let isUnique = !allE.some(ex => ex.name.toLowerCase() === d.name.toLowerCase());
         if (isUnique) { 
-            // FIX: No codificamos al guardar en RAM, solo al renderizar
             state.savedDecks.push({ name: d.name, colors: [...d.colors] }); 
             allE.push({ name: d.name, colors: [...d.colors] });
             nw = true; 
@@ -115,8 +114,8 @@ function syncDecksToLibrary() {
     if (nw) saveData(); 
 }
 
-// FIX: Retirado el syncDeks de aquí para evitar que el basurero "reviva" mazos.
 function openLibraryManager() { 
+    syncDecksToLibrary(); 
     const modal = document.getElementById('library-modal');
     if (!document.getElementById('library-list')) {
         modal.innerHTML = `
@@ -173,9 +172,12 @@ function toggleBan(pIdx, dIdx) {
 function goToPlayers() { 
     const c = document.getElementById('player-inputs-container'); c.innerHTML = ''; 
     if (state.savedPlayers.length > 0) { document.getElementById('saved-players-section').classList.remove('hidden'); renderSavedPlayers(); } 
-    let validD = state.deckData.filter(d => d.name.trim() !== ""); 
+    
+    // FIX: Utilizamos el OrigIdx en todo el mapeo para que nunca colisionen los Selects
+    let validD = state.deckData.map((d, i) => ({ ...d, origIdx: i })).filter(d => d.name.trim() !== "");
     let maxBans = Math.max(0, validD.length - 2);
     if (!state.playerBans) state.playerBans = [];
+    
     for (let i = 0; i < state.players; i++) { 
         if (!state.playerBans[i]) state.playerBans[i] = [];
         const def = state.tempPlayerNames[i] || ""; 
@@ -183,32 +185,31 @@ function goToPlayers() {
         let hasLock = lockVal !== -1;
         let atBanLimit = state.playerBans[i].length >= maxBans;
         
-        // FIX: Evitar que dos jugadores seleccionen el mismo mazo
         let deckOpts = `<option value="-1">🎲 Random Deck</option>`;
-        validD.forEach((d, dIdx) => {
+        validD.forEach((d) => {
             let lockedByOther = -1;
-            for(let j=0; j<state.players; j++){ if(j !== i && state.playerLocks[j] === dIdx) { lockedByOther = j; break; } }
-            let isLockedByMe = lockVal === dIdx;
+            for(let j=0; j<state.players; j++){ if(j !== i && state.playerLocks[j] === d.origIdx) { lockedByOther = j; break; } }
+            let isLockedByMe = lockVal === d.origIdx;
             let disabledAttr = lockedByOther !== -1 ? 'disabled' : '';
             let optClass = lockedByOther !== -1 ? 'text-slate-600' : 'text-slate-200';
             let lockText = lockedByOther !== -1 ? `(P${lockedByOther + 1})` : '';
-            deckOpts += `<option value="${dIdx}" class="${optClass}" ${isLockedByMe ? 'selected' : ''} ${disabledAttr}>${esc(d.name)} ${lockText}</option>`;
+            deckOpts += `<option value="${d.origIdx}" class="${optClass}" ${isLockedByMe ? 'selected' : ''} ${disabledAttr}>${esc(d.name)} ${lockText}</option>`;
         });
         
-        let bansHTML = validD.map((d, dIdx) => {
-            const isBanned = state.playerBans[i].includes(dIdx);
+        let bansHTML = validD.map((d) => {
+            const isBanned = state.playerBans[i].includes(d.origIdx);
             const isDisabled = hasLock || (!isBanned && atBanLimit);
             const titleMsg = hasLock ? "Cannot ban when a deck is locked." : (isDisabled ? `Max bans reached (${maxBans})` : "Ban this deck");
-            return `<button onclick="toggleBan(${i}, ${dIdx})" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}">
+            return `<button onclick="window.toggleBan(${i}, ${d.origIdx})" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}">
                 <span class="material-symbols-outlined text-[10px] align-middle mr-1">${isBanned ? 'block' : 'check_box_outline_blank'}</span> ${esc(d.name)}
             </button>`;
         }).join('');
-        c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button onclick="removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="setPlayerLock(${i}, parseInt(this.value))" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex justify-between items-center"><span>Vetoes (Bans)</span><span class="text-slate-600 font-normal normal-case text-[8px] flex items-center gap-1">Swipe <span class="material-symbols-outlined text-[10px]">arrow_forward</span></span></label><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`; 
+        c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button onclick="window.removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="window.setPlayerLock(${i}, parseInt(this.value))" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex justify-between items-center"><span>Vetoes (Bans)</span><span class="text-slate-600 font-normal normal-case text-[8px] flex items-center gap-1">Swipe <span class="material-symbols-outlined text-[10px]">arrow_forward</span></span></label><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`; 
     } 
     switchScreen(3); 
 }
 
-function renderSavedPlayers() { document.getElementById('saved-players-container').innerHTML = state.savedPlayers.map((p, i) => `<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="quickAdd('${esc(p)}')" class="setup-input size-12 rounded-full border border-app-primary bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-primary/20 transition-colors">${esc(p[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(p)}</span></div>`).join(''); }
+function renderSavedPlayers() { document.getElementById('saved-players-container').innerHTML = state.savedPlayers.map((p, i) => `<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAdd('${esc(p)}')" class="setup-input size-12 rounded-full border border-app-primary bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-primary/20 transition-colors">${esc(p[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(p)}</span></div>`).join(''); }
 function quickAdd(n) { for (let i = 0; i < state.players; i++) { const inp = document.getElementById('p-in-' + i); if (inp && !inp.value) { inp.value = n; state.tempPlayerNames[i] = n; break; } } saveData(); }
 async function deleteSavedPlayer(i) { const c = await mfModal.show("Remove Player?", `Are you sure you want to remove "${esc(state.savedPlayers[i])}" from your Roster?`, "person_remove", "confirm"); if (c) { state.savedPlayers.splice(i, 1); saveData(); renderSavedPlayers(); if (state.savedPlayers.length === 0) document.getElementById('saved-players-section').classList.add('hidden'); } }
 function removePlayer(i) { if (state.players <= 1) return; state.tempPlayerNames.splice(i, 1); state.playerLocks.splice(i, 1); state.playerBans.splice(i, 1); state.players--; goToPlayers(); saveData(); }
@@ -281,7 +282,7 @@ function saveUndoState() {
 }
 
 window.undoLastAction = function() {
-    if (menuOpen) toggleCenterMenu();
+    if (menuOpen) window.toggleCenterMenu();
     if (!state.undoStack || state.undoStack.length === 0) return mfModal.show("Undo", "No previous actions available.", "info");
     state.currentMatch = state.undoStack.pop();
     saveData();
@@ -336,8 +337,6 @@ function renderBattlefield() {
             if (count === 6 && i === 2) rotDeg = 180; 
         } 
         
-        // FIX: Reajustado el sistema Flex para evitar desbordes y rotaciones extrañas. 
-        // Siempre es flex-col para que el Hitbox inferior sea + y el superior sea -.
         let flexDir = 'flex-col'; let hitbox1 = '-1'; let hitbox2 = '1'; 
         if (rotDeg === 180) { hitbox1 = '1'; hitbox2 = '-1'; } 
         else if (rotDeg === -90) { hitbox1 = '1'; hitbox2 = '-1'; } 
@@ -369,7 +368,7 @@ function renderBattlefield() {
                 </div>
                 <div class="w-full px-4 pb-4 flex justify-between items-end ${p.isDead ? 'hidden' : ''}">
                     <div class="flex gap-2 flex-wrap pointer-events-auto">${renderCmdrDamageIcons(p)}</div>
-                    <button onclick="openCmdrModal(${i}, ${rotDeg})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto shadow-lg active:scale-95 transition-transform backdrop-blur-sm shrink-0"><span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span></button>
+                    <button onclick="window.openCmdrModal(${i}, ${rotDeg})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto shadow-lg active:scale-95 transition-transform backdrop-blur-sm shrink-0"><span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span></button>
                 </div>
             </div>
             ${deadOverlay}
@@ -388,20 +387,20 @@ function renderCmdrDamageIcons(player) {
     return html; 
 }
 
-function toggleLayout() { 
+window.toggleLayout = function() { 
     state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; 
     renderBattlefield(); 
-    toggleCenterMenu(); 
+    window.toggleCenterMenu(); 
     saveData(); 
 }
 
 let currentCmdrTarget = -1;
-function openCmdrModal(idx, rotDeg) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button onclick="changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button onclick="changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>` : '').join(''); const box = document.getElementById('cmdr-modal-box'); box.style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
-function changeCmdrDmg(tI, aI, v) { 
+window.openCmdrModal = function(idx, rotDeg) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button onclick="window.changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button onclick="window.changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>` : '').join(''); const box = document.getElementById('cmdr-modal-box'); box.style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
+window.changeCmdrDmg = function(tI, aI, v) { 
     saveUndoState();
-    let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 20); 
+    let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); window.openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 20); 
 }
-function closeCmdrModal() { document.getElementById('cmdr-modal').classList.add('hidden'); }
+window.closeCmdrModal = function() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
 let isCheckingDeath = false;
 async function checkEliminations() { 
@@ -418,7 +417,7 @@ async function checkEliminations() {
                 if (isEliminated) { 
                     p.isDead = true; 
                     p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)]; 
-                    if (currentCmdrTarget === i) closeCmdrModal(); 
+                    if (currentCmdrTarget === i) window.closeCmdrModal(); 
                 } else { 
                     if (cmdrDeath) { for (let k in p.cmdrDmg) if (p.cmdrDmg[k] >= 21) p.cmdrDmg[k] = 20; } else if (p.life <= 0) { p.life = 1; } 
                 } 
@@ -427,12 +426,12 @@ async function checkEliminations() {
         } 
     } 
     let alive = state.currentMatch.filter(p => !p.isDead); 
-    if (alive.length === 1 && state.currentMatch.length > 1) { setTimeout(() => { showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1200); } 
+    if (alive.length === 1 && state.currentMatch.length > 1) { setTimeout(() => { window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1200); } 
     isCheckingDeath = false; 
 }
 
 let menuOpen = false;
-function toggleCenterMenu() { 
+window.toggleCenterMenu = function() { 
     menuOpen = !menuOpen;
     const menu = document.getElementById('radial-menu-overlay');
     const icon = document.getElementById('center-menu-icon');
@@ -447,13 +446,13 @@ function toggleCenterMenu() {
     }
 }
 
-async function resetLife() { toggleCenterMenu(); const confirmReset = await mfModal.show("Reset Match", "All players will go back to 40 life.", "refresh", "confirm"); if (confirmReset) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); state.undoStack = []; saveData(); renderBattlefield(); } }
-function toggleFullScreen() { toggleCenterMenu(); if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { console.warn("Fullscreen error"); }); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
-function rollD20All() { toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let final = {}; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if (r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); state.currentMatch.forEach((p, i) => { if (!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
-function endMatchManual() { toggleCenterMenu(); releaseWakeLock(); goToScreen6Manual(); }
-function goToScreen6Manual() { state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-black text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
+window.resetLife = async function() { window.toggleCenterMenu(); const confirmReset = await mfModal.show("Reset Match", "All players will go back to 40 life.", "refresh", "confirm"); if (confirmReset) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); state.undoStack = []; saveData(); renderBattlefield(); } }
+window.toggleFullScreen = function() { window.toggleCenterMenu(); if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { console.warn("Fullscreen error"); }); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
+window.rollD20All = function() { window.toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let final = {}; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if (r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); state.currentMatch.forEach((p, i) => { if (!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
+window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
+window.goToScreen6Manual = function() { state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-black text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
 
-function showUltimateWinner(idx) { 
+window.showUltimateWinner = function(idx) { 
     releaseWakeLock();
     playTransition(GIFS.WINNER, 3200, () => { 
         state.matchFinished = true; const w = state.currentMatch[idx]; const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
@@ -465,9 +464,8 @@ function showUltimateWinner(idx) {
     }); 
 }
 
-function startOver() { 
+window.startOver = function() { 
     releaseWakeLock();
-    // FIX: Limpieza forzosa de bans y locks al volver a empezar para no ensuciar partidas nuevas
     state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; state.undoStack = [];
     state.playerBans = []; state.playerLocks = [];
     state.step = state.gameMode === 'commander' ? 1 : 7;
@@ -481,9 +479,9 @@ function renderHistory() {
     if(!c) return;
     if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); 
     else document.getElementById('history-section').classList.add('hidden');
-    c.innerHTML = state.history.slice(0, 5).map((m, i) => `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button onclick="deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 opacity-100 transition-all"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex justify-between mb-2 text-slate-500 uppercase font-bold tracking-tighter pr-8"><span>${m.date}</span><span class="text-yellow-400">🏆 ${esc(m.winner)} <span class="text-[8px] text-slate-600 ml-1">(${m.mode || 'Commander'})</span></span></div>${(m.mode === 'Jumpstart' && m.podium) ? `<div class="mt-2 text-[9px] text-slate-400 border-t border-white/5 pt-1">Podium: 🥇${esc(m.podium[0])} 🥈${esc(m.podium[1] || '--')} 🥉${esc(m.podium[2] || '--')}</div>` : (m.pairings ? m.pairings.map(p => `<div class="flex justify-between py-0.5"><span class="text-slate-300">${esc(p.player)}</span><span class="text-slate-400 font-medium">${p.deck ? esc(p.deck.name) : ''}</span></div>`).join('') : '')}</div>`).join(''); 
+    c.innerHTML = state.history.slice(0, 5).map((m, i) => `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button onclick="window.deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 opacity-100 transition-all"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex justify-between mb-2 text-slate-500 uppercase font-bold tracking-tighter pr-8"><span>${m.date}</span><span class="text-yellow-400">🏆 ${esc(m.winner)} <span class="text-[8px] text-slate-600 ml-1">(${m.mode || 'Commander'})</span></span></div>${(m.mode === 'Jumpstart' && m.podium) ? `<div class="mt-2 text-[9px] text-slate-400 border-t border-white/5 pt-1">Podium: 🥇${esc(m.podium[0])} 🥈${esc(m.podium[1] || '--')} 🥉${esc(m.podium[2] || '--')}</div>` : (m.pairings ? m.pairings.map(p => `<div class="flex justify-between py-0.5"><span class="text-slate-300">${esc(p.player)}</span><span class="text-slate-400 font-medium">${p.deck ? esc(p.deck.name) : ''}</span></div>`).join('') : '')}</div>`).join(''); 
 }
-async function deleteHistoryEntry(idx) { const isConfirmed = await mfModal.show("Delete Match?", "This action will remove the match from the history.", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
+window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete Match?", "This action will remove the match from the history.", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
 
 window.updateCount = updateCount;
 window.applyDandLPreset = applyDandLPreset;
@@ -502,24 +500,12 @@ window.deleteSavedPlayer = deleteSavedPlayer;
 window.setPlayerLock = setPlayerLock;
 window.toggleBan = toggleBan;
 window.reassignDecks = reassignDecks;
-window.toggleCenterMenu = toggleCenterMenu;
-window.rollD20All = rollD20All;
-window.resetLife = resetLife;
-window.endMatchManual = endMatchManual;
-window.toggleFullScreen = toggleFullScreen;
-window.toggleLayout = toggleLayout;
-window.openCmdrModal = openCmdrModal;
-window.closeCmdrModal = closeCmdrModal;
-window.changeCmdrDmg = changeCmdrDmg;
 window.handleTapStart = handleTapStart;
 window.handleTapEnd = handleTapEnd;
-window.showUltimateWinner = showUltimateWinner;
-window.deleteHistoryEntry = deleteHistoryEntry;
-window.startOver = startOver;
 
 export function handleCommanderNext() {
     if (state.step === 1) { 
-        state.playerLocks = []; state.playerBans = []; // FIX: Purga la memoria al iniciar partida manual
+        state.playerLocks = []; state.playerBans = []; 
         goToDecks(); 
     } 
     else if (state.step === 2) { 
