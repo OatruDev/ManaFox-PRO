@@ -4,6 +4,29 @@ import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
 import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme, getArchetype } from '../utils.js';
 
+let wakeLock = null;
+
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+        }
+    } catch (err) { console.warn("Wake Lock error:", err); }
+}
+
+function releaseWakeLock() {
+    if (wakeLock !== null) { 
+        wakeLock.release(); 
+        wakeLock = null; 
+    }
+}
+
+document.addEventListener('visibilitychange', async () => {
+    if (wakeLock !== null && document.visibilityState === 'visible' && state.step === 5) { 
+        await requestWakeLock(); 
+    }
+});
+
 export function initCommander() {
     if (state.step === 1) {
         document.getElementById('count-players').innerText = state.players;
@@ -73,7 +96,6 @@ function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors
 function removeDeck(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
 function addExtraDeck() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
 
-// FIX: Función que auto-nombra y sincroniza los mazos a la librería global
 function syncDecksToLibrary() { 
     let allE = [...baseDecks, ...state.savedDecks]; 
     let nw = false; 
@@ -94,7 +116,7 @@ function syncDecksToLibrary() {
 }
 
 function openLibraryManager() { 
-    syncDecksToLibrary(); // Sincronizamos antes de abrir para mostrar lo nuevo
+    syncDecksToLibrary(); 
     const modal = document.getElementById('library-modal');
     if (!document.getElementById('library-list')) {
         modal.innerHTML = `
@@ -214,7 +236,7 @@ function executeAssignment() {
         let mDeck = tempMatch[i] ? tempMatch[i].deck : null;
         state.currentMatch.push({ player: pN, deck: mDeck, life: 40, cmdrDmg: {}, isDead: false, themeVars: getPlayerTheme(mDeck ? mDeck.colors : []), deathQuote: "" }); 
     } 
-    state.remainingDecks = [...pool]; saveData(); buildResultsDOM(); switchScreen(4); 
+    state.remainingDecks = [...pool]; state.undoStack = []; saveData(); buildResultsDOM(); switchScreen(4); 
 }
 
 function reassignDecks() { executeAssignment(); }
@@ -232,12 +254,36 @@ function buildResultsDOM() {
     } else remSec.classList.add('hidden'); 
 }
 
-function initBattlefield() { playTransition(GIFS.BATTLE, 2600, () => { renderBattlefield(); switchScreen(5); }); }
+function initBattlefield() { 
+    playTransition(GIFS.BATTLE, 2600, async () => { 
+        renderBattlefield(); 
+        switchScreen(5); 
+        await requestWakeLock(); 
+    }); 
+}
+
+// FIX: Undo Stack Snapshot Engine
+function saveUndoState() {
+    if (!state.undoStack) state.undoStack = [];
+    state.undoStack.push(JSON.parse(JSON.stringify(state.currentMatch)));
+    if (state.undoStack.length > 20) state.undoStack.shift();
+}
+
+window.undoLastAction = function() {
+    if (menuOpen) toggleCenterMenu();
+    if (!state.undoStack || state.undoStack.length === 0) return mfModal.show("Undo", "No previous actions available.", "info");
+    state.currentMatch = state.undoStack.pop();
+    saveData();
+    renderBattlefield();
+}
 
 let holdTimer = null; let holdInterval = null; let eliminationTimer = null;
 function handleTapStart(e, idx, amt) {
     if (e && e.cancelable) e.preventDefault(); 
     if (state.currentMatch[idx].isDead) return;
+    
+    saveUndoState(); // Snapshot before any changes occur
+    
     clearTimeout(holdTimer); clearInterval(holdInterval);
     changeLife(idx, amt);
     holdTimer = setTimeout(() => { holdInterval = setInterval(() => { changeLife(idx, amt * 5); }, 150); }, 400); 
@@ -302,7 +348,6 @@ function renderCmdrDamageIcons(player) {
     return html; 
 }
 
-// FIX: Modificado para invocar al Modal Central
 function toggleLayout() { 
     state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; 
     renderBattlefield(); 
@@ -312,7 +357,10 @@ function toggleLayout() {
 
 let currentCmdrTarget = -1;
 function openCmdrModal(idx, rotDeg) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button onclick="changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button onclick="changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>` : '').join(''); const box = document.getElementById('cmdr-modal-box'); box.style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
-function changeCmdrDmg(tI, aI, v) { let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 20); }
+function changeCmdrDmg(tI, aI, v) { 
+    saveUndoState(); // Snapshot
+    let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 20); 
+}
 function closeCmdrModal() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
 let isCheckingDeath = false;
@@ -343,22 +391,26 @@ async function checkEliminations() {
     isCheckingDeath = false; 
 }
 
-// FIX: Función que invoca el nuevo Modal de Cristal en vez del antiguo menú radial
+let menuOpen = false;
 function toggleCenterMenu() { 
     const m = document.getElementById('match-menu-modal');
     if (m) {
-        if(m.classList.contains('hidden')) { m.classList.remove('hidden'); m.classList.add('flex'); }
-        else { m.classList.add('hidden'); m.classList.remove('flex'); }
+        if(m.classList.contains('hidden')) { 
+            m.classList.remove('hidden'); m.classList.add('flex'); menuOpen = true;
+        } else { 
+            m.classList.add('hidden'); m.classList.remove('flex'); menuOpen = false;
+        }
     }
 }
 
-async function resetLife() { toggleCenterMenu(); const confirmReset = await mfModal.show("Reset Match", "All players will go back to 40 life.", "refresh", "confirm"); if (confirmReset) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); saveData(); renderBattlefield(); } }
+async function resetLife() { toggleCenterMenu(); const confirmReset = await mfModal.show("Reset Match", "All players will go back to 40 life.", "refresh", "confirm"); if (confirmReset) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); state.undoStack = []; saveData(); renderBattlefield(); } }
 function toggleFullScreen() { toggleCenterMenu(); if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { console.warn("Fullscreen error"); }); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
 function rollD20All() { toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let final = {}; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if (r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); state.currentMatch.forEach((p, i) => { if (!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
-function endMatchManual() { toggleCenterMenu(); goToScreen6Manual(); }
+function endMatchManual() { toggleCenterMenu(); releaseWakeLock(); goToScreen6Manual(); }
 function goToScreen6Manual() { state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-black text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
 
 function showUltimateWinner(idx) { 
+    releaseWakeLock();
     playTransition(GIFS.WINNER, 3200, () => { 
         state.matchFinished = true; const w = state.currentMatch[idx]; const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
         triggerConfetti(w.deck ? w.deck.colors : []);
@@ -370,7 +422,8 @@ function showUltimateWinner(idx) {
 }
 
 function startOver() { 
-    state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; 
+    releaseWakeLock();
+    state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; state.undoStack = [];
     state.step = state.gameMode === 'commander' ? 1 : 7;
     saveData(); 
     switchScreen(state.step); 
@@ -421,7 +474,7 @@ window.startOver = startOver;
 export function handleCommanderNext() {
     if (state.step === 1) goToDecks(); 
     else if (state.step === 2) { 
-        syncDecksToLibrary(); // FIX: Sincroniza y renombra los mazos vacíos antes de pasar a la pantalla de Jugadores
+        syncDecksToLibrary(); 
         goToPlayers(); 
     } 
     else if (state.step === 3) { 

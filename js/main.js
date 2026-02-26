@@ -46,7 +46,7 @@ function setupGlobalListeners() {
     if (creditsBtn) {
         // FIX: Eliminado el async/await que colgaba la promesa del modal custom
         creditsBtn.addEventListener('click', () => {
-            let msg = "Versión: v1.3 Modular (Offline PWA)\n\n- Arquitectura: ES Modules.\n- Nuevo Motor Veto (Bans/Locks) activado.\n- Transiciones SPA Instantáneas.";
+            let msg = "Versión: v1.0.0 Modular (Offline PWA)\n\n- Arquitectura: ES Modules.\n- Nuevo Motor Veto (Bans/Locks) activado.\n- Transiciones SPA Instantáneas.";
             let customHtml = `
                 <div class="flex flex-col w-full">
                     <button id="btn-hard-reset" class="w-full mb-2 bg-red-900/20 border border-red-500/30 text-red-400 py-3 rounded-xl font-bold hover:bg-red-500 hover:text-white transition active:scale-95 text-xs flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[14px]">delete_forever</span> Borrar Memoria y Reiniciar App</button>

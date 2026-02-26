@@ -6,6 +6,7 @@
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>ManaFox: Zorro Corp Edition</title>
     
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
@@ -13,7 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <script>
-        tailwind.config = { darkMode: "class", theme: { extend: { colors: { "app-bg": "#09090b", "app-surface": "#18181b", "app-surface-light": "#27272a", "app-primary": "#8b5cf6", "app-accent": "#06b6d4", "app-js": "#f59e0b", "app-market": "#10b981" }, fontFamily: { "sans": ["Inter", "sans-serif"] } } } }
+        tailwind.config = { darkMode: "class", theme: { extend: { colors: { "app-bg": "#000000", "app-surface": "#18181b", "app-surface-light": "#27272a", "app-primary": "#8b5cf6", "app-accent": "#06b6d4", "app-js": "#f59e0b", "app-market": "#10b981" }, fontFamily: { "sans": ["Inter", "sans-serif"] } } } }
     </script>
     <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -47,8 +48,8 @@
                     <polygon points="15,35 25,5 40,22" fill="currentColor" opacity="0.8"/>
                     <polygon points="85,35 75,5 60,22" fill="currentColor" opacity="0.8"/>
                     <polygon points="50,15 35,35 50,55 65,35" fill="currentColor" opacity="0.7"/>
-                    <circle cx="35" cy="45" r="4" fill="#09090b" />
-                    <circle cx="65" cy="45" r="4" fill="#09090b" />
+                    <circle cx="35" cy="45" r="4" fill="#000000" />
+                    <circle cx="65" cy="45" r="4" fill="#000000" />
                 </svg>
             </div>
             <span id="header-back-icon" class="material-symbols-outlined hidden text-slate-300">arrow_back</span>
@@ -100,10 +101,11 @@
             <div id="match-menu-modal" class="absolute inset-0 z-[60] bg-black/85 hidden flex-col items-center justify-center p-6 backdrop-blur-md transition-opacity">
                 <h3 class="font-black text-3xl mb-8 text-center text-white tracking-widest uppercase">Match Menu</h3>
                 <div class="grid grid-cols-2 gap-4 w-full max-w-sm">
+                    <button onclick="window.undoLastAction()" class="bg-emerald-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">undo</span><span class="text-[10px] font-bold uppercase tracking-wider">Undo</span></button>
                     <button onclick="rollD20All()" class="bg-blue-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">casino</span><span class="text-[10px] font-bold uppercase tracking-wider">Roll D20</span></button>
                     <button onclick="resetLife()" class="bg-yellow-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">refresh</span><span class="text-[10px] font-bold uppercase tracking-wider">Reset Life</span></button>
-                    <button id="layout-toggle-btn" onclick="toggleLayout()" class="bg-purple-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex-col items-center justify-center gap-2 hidden"><span class="material-symbols-outlined text-3xl">dashboard</span><span class="text-[10px] font-bold uppercase tracking-wider">Layout</span></button>
                     <button onclick="toggleFullScreen()" class="bg-indigo-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">fullscreen</span><span class="text-[10px] font-bold uppercase tracking-wider">Fullscreen</span></button>
+                    <button id="layout-toggle-btn" onclick="toggleLayout()" class="col-span-2 bg-purple-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex-col items-center justify-center gap-2 hidden"><span class="material-symbols-outlined text-3xl">dashboard</span><span class="text-[10px] font-bold uppercase tracking-wider">Change Layout</span></button>
                     <button onclick="endMatchManual()" class="col-span-2 bg-red-600 text-white py-6 rounded-2xl shadow-lg transition active:scale-95 flex flex-col items-center justify-center gap-2"><span class="material-symbols-outlined text-3xl">flag</span><span class="text-[10px] font-bold uppercase tracking-wider">End Match</span></button>
                 </div>
                 <button onclick="toggleCenterMenu()" class="mt-8 size-14 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition"><span class="material-symbols-outlined">close</span></button>
