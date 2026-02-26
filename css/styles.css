@@ -10,9 +10,10 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 
 .mana-btn { transition: all 0.2s; border: 2px solid transparent; }
 .mana-btn.active { border-color: #ffffff; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5); }
-.mana-w { background-color: #fef08a !important; color: #854d0e !important; }
+/* FIX UX/UI: Todos los iconos son blancos. Fondos ajustados para contraste óptimo */
+.mana-w { background-color: #eab308 !important; color: #ffffff !important; }
 .mana-u { background-color: #3b82f6 !important; color: #ffffff !important; }
-.mana-b { background-color: #1e293b !important; color: #cbd5e1 !important; border-color: #475569; }
+.mana-b { background-color: #27272a !important; color: #ffffff !important; border-color: #52525b; }
 .mana-r { background-color: #ef4444 !important; color: #ffffff !important; }
 .mana-g { background-color: #22c55e !important; color: #ffffff !important; }
 .opacity-30.mana-w, .opacity-30.mana-u, .opacity-30.mana-b, .opacity-30.mana-r, .opacity-30.mana-g { background-color: #27272a !important; color: #71717a !important; border-color: transparent !important; }

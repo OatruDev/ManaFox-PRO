@@ -1,8 +1,9 @@
 // /js/utils.js
 
 export const GIFS = {
-    BATTLE: 'https://media0.giphy.com/media/l41lZD0i4UU9PkDJe/giphy.gif',
-    WINNER: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbmpwanhpbDU2ZWlscHI4bDRvZ3psczkzMHR5bzlocTBmY3J3MWFiNSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vQZA3WY4C1iku6Q/giphy.gif'
+    // FIX: GIFs intercambiados
+    BATTLE: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbmpwanhpbDU2ZWlscHI4bDRvZ3psczkzMHR5bzlocTBmY3J3MWFiNSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l3vQZA3WY4C1iku6Q/giphy.gif',
+    WINNER: 'https://media0.giphy.com/media/l41lZD0i4UU9PkDJe/giphy.gif'
 };
 
 export const baseDecks = [
@@ -18,7 +19,6 @@ export const baseDecks = [
 export const winQuotes = ["Your Spark burns brighter than ever! ⚡", "A flawless victory, Planeswalker. 🏆", "The Multiverse bows to your command. 🌌"];
 export const loseQuotes = ["Mana flooded, or just outplayed? 💧", "Countered. Destroyed. Forgotten. 💀", "Your Spark fades into the blind eternities... 🌑"];
 
-// Diccionario exacto según tu lista
 const archetypes = {
     'W': 'White', 'U': 'Blue', 'B': 'Black', 'R': 'Red', 'G': 'Green',
     'UW': 'Azorius', 'BW': 'Orzhov', 'RW': 'Boros', 'GW': 'Selesnya', 'BU': 'Dimir',
@@ -29,24 +29,15 @@ const archetypes = {
     'BGRUW': 'WUBRG'
 };
 
-/**
- * Detecta el arquetipo comparando el contenido de los arrays, 
- * sin importar el orden en que el usuario hizo click.
- */
 export function getArchetype(selectedColors) {
     if (!selectedColors || selectedColors.length === 0) return 'Colorless';
-    
-    // Convertimos la selección actual en un set ordenado para comparar
     const currentSelection = [...selectedColors].sort().join('');
-
-    // Buscamos en el diccionario normalizando también sus llaves
     for (const [key, name] of Object.entries(archetypes)) {
         const normalizedKey = key.split('').sort().join('');
         if (currentSelection === normalizedKey) {
             return name;
         }
     }
-    
     return 'Unknown';
 }
 
