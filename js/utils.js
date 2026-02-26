@@ -18,23 +18,36 @@ export const baseDecks = [
 export const winQuotes = ["Your Spark burns brighter than ever! ⚡", "A flawless victory, Planeswalker. 🏆", "The Multiverse bows to your command. 🌌"];
 export const loseQuotes = ["Mana flooded, or just outplayed? 💧", "Countered. Destroyed. Forgotten. 💀", "Your Spark fades into the blind eternities... 🌑"];
 
-// Diccionario de Arquetipos de Magic
+// Diccionario exacto según tu lista
 const archetypes = {
-    '': 'Colorless',
-    'W': 'Mono-White', 'U': 'Mono-Blue', 'B': 'Mono-Black', 'R': 'Mono-Red', 'G': 'Mono-Green',
-    'WU': 'Azorius', 'UB': 'Dimir', 'BR': 'Rakdos', 'RG': 'Gruul', 'GW': 'Selesnya',
-    'WB': 'Orzhov', 'UR': 'Izzet', 'BG': 'Golgari', 'RW': 'Boros', 'GU': 'Simic',
-    'GWU': 'Bant', 'WUB': 'Esper', 'UBR': 'Grixis', 'BRG': 'Jund', 'RGW': 'Naya',
-    'WBG': 'Abzan', 'URW': 'Jeskai', 'BGU': 'Sultai', 'RWB': 'Mardu', 'GUR': 'Temur',
-    'UBRG': 'Glint-Eye', 'BRGW': 'Dune-Brood', 'RGWU': 'Ink-Treader', 'GWUB': 'Witch-Maw', 'WUBR': 'Yore-Tiller',
-    'WUBRG': 'Pentacolor'
+    'W': 'White', 'U': 'Blue', 'B': 'Black', 'R': 'Red', 'G': 'Green',
+    'UW': 'Azorius', 'BW': 'Orzhov', 'RW': 'Boros', 'GW': 'Selesnya', 'BU': 'Dimir',
+    'RU': 'Izzet', 'GU': 'Simic', 'BR': 'Rakdos', 'BG': 'Golgari', 'GR': 'Gruul',
+    'BUW': 'Esper', 'RUW': 'Jeskai', 'GUW': 'Bant', 'BRW': 'Mardu', 'BGW': 'Abzan',
+    'GRW': 'Naya', 'BRU': 'Grixis', 'BGU': 'Sultai', 'GRU': 'Temur', 'BGR': 'Jund',
+    'BRUW': 'Yore', 'BGUW': 'Witch', 'GRUW': 'Ink', 'BGRW': 'Dune', 'BGRU': 'Glint',
+    'BGRUW': 'WUBRG'
 };
 
-export function getArchetype(colors) {
-    // Ordenar colores según WUBRG para coincidir con las llaves del diccionario
-    const order = ['W', 'U', 'B', 'R', 'G'];
-    const sorted = colors.sort((a, b) => order.indexOf(a) - order.indexOf(b)).join('');
-    return archetypes[sorted] || 'Unknown';
+/**
+ * Detecta el arquetipo comparando el contenido de los arrays, 
+ * sin importar el orden en que el usuario hizo click.
+ */
+export function getArchetype(selectedColors) {
+    if (!selectedColors || selectedColors.length === 0) return 'Colorless';
+    
+    // Convertimos la selección actual en un set ordenado para comparar
+    const currentSelection = [...selectedColors].sort().join('');
+
+    // Buscamos en el diccionario normalizando también sus llaves
+    for (const [key, name] of Object.entries(archetypes)) {
+        const normalizedKey = key.split('').sort().join('');
+        if (currentSelection === normalizedKey) {
+            return name;
+        }
+    }
+    
+    return 'Unknown';
 }
 
 export function preloadGifs() { 

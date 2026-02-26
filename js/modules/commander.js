@@ -48,14 +48,14 @@ function buildDeckDOM() {
     const c = document.getElementById('deck-inputs-container'); c.innerHTML = ''; 
     const lib = [...baseDecks, ...state.savedDecks]; 
     state.deckData.forEach((d, i) => { 
-        const arch = getArchetype(d.colors);
+        const archName = getArchetype(d.colors);
         const colorsHTML = state.manaColors.map(m => `<button onclick="toggleColor(${i},'${m.id}')" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id) ? 'active' : 'opacity-30'}">${m.icon}</button>`).join(''); 
         c.innerHTML += `
         <div class="bg-app-surface p-4 rounded-2xl border border-white/5 shadow-sm">
             <div class="flex justify-between items-center mb-2">
                 <div class="flex flex-col">
                     <label class="text-[10px] font-bold text-app-primary uppercase">Deck #${i + 1}</label>
-                    <span class="text-[9px] font-black text-slate-500 uppercase tracking-tighter">${arch}</span>
+                    <span class="text-[11px] font-black text-white bg-white/10 px-2 py-0.5 rounded-md mt-1 uppercase tracking-wider">${archName}</span>
                 </div>
                 <div class="flex gap-2">
                     <select onchange="loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name)}</option>`).join('')}</select>
@@ -267,7 +267,6 @@ function renderCmdrDamageIcons(player) {
     let html = ''; 
     for (let attackerIdx in player.cmdrDmg) { 
         let dmg = player.cmdrDmg[attackerIdx]; 
-        // FIX: El daño se muestra de forma individual por carta
         if (dmg > 0 && state.currentMatch[attackerIdx] && !state.currentMatch[attackerIdx].isDead) { 
             html += `<div class="size-10 rounded-full bg-red-900/90 border border-red-500/50 flex items-center justify-center flex-col shadow-lg"><span class="text-[9px] font-bold text-red-200 leading-none">${esc(state.currentMatch[attackerIdx].player[0].toUpperCase())}</span><span class="text-[14px] font-black text-white leading-none">${dmg}</span></div>`; 
         } 
@@ -284,7 +283,6 @@ function changeCmdrDmg(tI, aI, v) {
     let oldVal = t.cmdrDmg[aI] || 0; 
     let newVal = Math.max(0, oldVal + v); 
     t.cmdrDmg[aI] = newVal; 
-    // FIX: El daño de comandante resta vida 1 a 1
     t.life -= (newVal - oldVal); 
     saveData(); 
     openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); 
@@ -303,7 +301,6 @@ async function checkEliminations() {
         if (!p.isDead) { 
             let cmdrDeath = false; 
             if (p.cmdrDmg) { 
-                // FIX: Solo muere si un ÚNICO comandante llega a 21
                 cmdrDeath = Object.values(p.cmdrDmg).some(d => d >= 21); 
             } 
             if (p.life <= 0 || cmdrDeath) { 
