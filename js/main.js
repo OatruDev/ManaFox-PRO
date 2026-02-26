@@ -3,8 +3,8 @@ import { state, loadLocalState, saveData, resetLocalState } from './state.js';
 import { preloadGifs } from './utils.js';
 import { mfModal, applyThemeColors, switchScreen } from './ui.js';
 
-// Importaremos los módulos reales en la Fase 3
-// import { initCommander, handleCommanderNext, goBackCommander } from './modules/commander.js';
+// Importamos el módulo de Commander (Fase 3)
+import { initCommander, handleCommanderNext, goBackCommander } from './modules/commander.js';
 // import { initJumpstart, handleJumpstartNext, goBackJumpstart } from './modules/jumpstart.js';
 // import { initMarket } from './modules/market.js';
 
@@ -14,19 +14,13 @@ document.addEventListener("DOMContentLoaded", () => {
     applyThemeColors();
     setupGlobalListeners();
     
-    const lastStep = state.step || 1;
-    switchScreen(lastStep);
-
-    // ⚠️ ALERTA DE TRANSICIÓN (Fase 3 pendiente)
-    const s1 = document.getElementById('screen-1');
-    if(s1 && s1.innerHTML.trim() === '') {
-        s1.innerHTML = `
-            <div class="flex flex-col items-center justify-center h-[60svh] text-center px-4">
-                <span class="material-symbols-outlined text-6xl text-app-primary animate-pulse mb-4">manufacturing</span>
-                <h2 class="text-2xl font-black text-white uppercase tracking-widest mb-2">Motor listo</h2>
-                <p class="text-slate-400 text-sm">El núcleo funciona perfecto. Solo falta inyectar los módulos de Commander, Jumpstart y Market (Fase 3).</p>
-            </div>
-        `;
+    // Arranque inicial basado en el modo
+    if (state.gameMode === 'commander') {
+        initCommander();
+    } else {
+        // Fallback temporal para Jumpstart (hasta Fase 4)
+        switchScreen(state.step || 7);
+        showWIPScreen();
     }
 });
 
@@ -35,8 +29,7 @@ function setupGlobalListeners() {
     const mainBtn = document.getElementById('main-btn');
     if (mainBtn) {
         mainBtn.addEventListener('click', () => {
-            console.log("Siguiente paso clickeado. Esperando módulos de Fase 3...");
-            // if(state.gameMode === 'commander') handleCommanderNext();
+            if(state.gameMode === 'commander') handleCommanderNext();
             // else handleJumpstartNext();
         });
     }
@@ -48,8 +41,7 @@ function setupGlobalListeners() {
             if(state.step === 1 || state.step === 7) {
                 renderAndOpenModeHub();
             } else {
-                console.log("Go back pending - Fase 3");
-                // if(state.gameMode === 'commander') goBackCommander();
+                if(state.gameMode === 'commander') goBackCommander();
                 // else goBackJumpstart();
             }
         });
@@ -100,7 +92,7 @@ function renderAndOpenModeHub() {
     
     document.getElementById('btn-mode-cmd').addEventListener('click', () => changeMode('commander'));
     document.getElementById('btn-mode-js').addEventListener('click', () => changeMode('jumpstart'));
-    document.getElementById('btn-mode-mkt').addEventListener('click', () => { console.log("Market pending Fase 3"); });
+    document.getElementById('btn-mode-mkt').addEventListener('click', () => { console.log("Market pending Fase 4"); });
     document.getElementById('btn-close-hub').addEventListener('click', () => {
         modal.classList.add('hidden'); modal.classList.remove('flex');
     });
@@ -115,5 +107,18 @@ function changeMode(newMode) {
     applyThemeColors();
     document.getElementById('mode-modal').classList.add('hidden');
     document.getElementById('mode-modal').classList.remove('flex');
-    window.location.reload(); // Reinicia limpio en el nuevo modo
+    window.location.reload(); // Reinicia limpio
+}
+
+function showWIPScreen() {
+    const s7 = document.getElementById('screen-7');
+    if(s7 && s7.innerHTML.trim() === '') {
+        s7.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-[60svh] text-center px-4">
+                <span class="material-symbols-outlined text-6xl text-app-js animate-bounce mb-4">construction</span>
+                <h2 class="text-2xl font-black text-white uppercase tracking-widest mb-2">Work In Progress</h2>
+                <p class="text-slate-400 text-sm">Módulos Jumpstart y Market pendientes de Fase 4.</p>
+            </div>
+        `;
+    }
 }
