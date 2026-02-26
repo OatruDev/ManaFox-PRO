@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https://media.giphy.com https://media0.giphy.com https://media1.giphy.com https://media2.giphy.com https://media3.giphy.com https://media4.giphy.com; connect-src 'self' https://api.scryfall.com; object-src 'none'; base-uri 'none';">
+
+    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJuYW1lIjogIk1hbmFGb3g6IFpvcnJvIENvcnAgRWRpdGlvbiIsCiAgInNob3J0X25hbWUiOiAiTWFuYUZveCIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzA5MDkwYiIsCiAgInRoZW1lX2NvbG9yIjogIiMwOTA5MGIiCn0=">
+    <title>ManaFox: Zorro Corp Edition</title>
+    
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/mana-font@latest/css/mana.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: { 
+                extend: { 
+                    colors: { 
+                        "app-bg": "#09090b",       
+                        "app-surface": "#18181b",  
+                        "app-surface-light": "#27272a", 
+                        "app-primary": "#8b5cf6",  
+                        "app-accent": "#06b6d4",
+                        "app-js": "#f59e0b",
+                        "app-market": "#10b981"
+                    },
+                    fontFamily: { "sans": ["Inter", "sans-serif"] } 
+                } 
+            }
+        }
+    </script>
+    
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body class="min-h-[100svh] flex flex-col pb-24 relative">
+
+    <div id="transition-overlay" class="fixed inset-0 z-[100000] bg-black flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <img id="transition-gif" src="" class="w-full h-full object-contain" style="max-height: 100svh; max-width: 100vw;" />
+    </div>
+
+    <div id="mf-modal" class="fixed inset-0 flex flex-col items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none scale-95" style="z-index: 99999; background-color: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+        <div id="mf-modal-content" class="bg-app-surface border border-app-primary/50 rounded-3xl p-6 w-full max-w-xs shadow-[0_0_40px_rgba(139,92,246,0.3)] text-center relative overflow-hidden">
+            <span id="mf-modal-icon" class="material-symbols-outlined text-6xl mb-4 text-app-accent drop-shadow-[0_0_15px_rgba(6,182,212,0.8)] relative z-10">info</span>
+            <h3 id="mf-modal-title" class="font-black text-xl text-white mb-2 tracking-widest uppercase relative z-10"></h3>
+            <p id="mf-modal-msg" class="text-slate-300 text-sm mb-6 whitespace-pre-line relative z-10"></p>
+            <div id="mf-modal-btns" class="flex gap-3 justify-center relative z-10"></div>
+        </div>
+    </div>
+
+    <div id="mode-modal" class="fixed inset-0 z-[90] bg-black/90 hidden flex items-center justify-center p-4 backdrop-blur-md"></div>
+    <div id="market-modal" class="fixed inset-0 z-[100] bg-black/95 hidden flex flex-col p-4 backdrop-blur-md"></div>
+    <div id="library-modal" class="fixed inset-0 z-[80] bg-black/90 hidden flex items-center justify-center p-4 backdrop-blur-md"></div>
+
+    <header id="main-header" class="flex-none px-4 pt-10 pb-4 flex items-center justify-between sticky top-0 bg-transparent backdrop-blur-md z-50 transition-transform">
+        <button id="btn-header-action" class="size-10 flex-none flex items-center justify-center rounded-full hover:bg-white/10 transition-all relative group">
+            <div id="header-logo-container" class="size-8 flex items-center justify-center text-app-primary group-hover:text-white transition-colors">
+                <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-[0_0_12px_currentColor]">
+                    <polygon points="50,90 15,35 50,15 85,35" fill="currentColor" opacity="0.9"/>
+                    <polygon points="50,90 15,35 10,55" fill="currentColor" opacity="0.6"/>
+                    <polygon points="50,90 85,35 90,55" fill="currentColor" opacity="0.6"/>
+                    <polygon points="15,35 25,5 40,22" fill="currentColor" opacity="0.8"/>
+                    <polygon points="85,35 75,5 60,22" fill="currentColor" opacity="0.8"/>
+                    <polygon points="50,15 35,35 50,55 65,35" fill="currentColor" opacity="0.7"/>
+                    <circle cx="35" cy="45" r="4" fill="#09090b" />
+                    <circle cx="65" cy="45" r="4" fill="#09090b" />
+                </svg>
+            </div>
+            <span id="header-back-icon" class="material-symbols-outlined hidden text-slate-300">arrow_back</span>
+        </button>
+        
+        <div class="flex flex-col items-center flex-1 min-w-0 px-2 overflow-hidden">
+            <h1 id="top-title" class="text-xl font-black tracking-tighter uppercase italic w-full text-center mt-1">MANA<span id="title-color" class="text-app-primary transition-colors">FOX</span></h1>
+        </div>
+
+        <button id="btn-show-credits" class="size-10 flex-none flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/10">
+            <span class="material-symbols-outlined text-[20px]">help</span>
+        </button>
+    </header>
+
+    <main id="screen-1" class="screen active px-4 mt-4 relative z-10"></main>
+    <main id="screen-2" class="screen px-4 mt-2 relative z-10"></main>
+    <main id="screen-3" class="screen px-4 mt-2 relative z-10"></main>
+    <main id="screen-4" class="screen px-4 mt-2 relative z-10"></main>
+    <main id="screen-5" class="screen"></main>
+    <main id="screen-6" class="screen px-4 mt-2 pb-32 relative z-10"></main>
+    <main id="screen-7" class="screen px-4 mt-2 relative z-10"></main>
+    <main id="screen-8" class="screen px-4 mt-2 relative z-10"></main>
+    <main id="screen-9" class="screen px-4 mt-2 relative z-10"></main>
+
+    <div id="main-action-bar" class="fixed bottom-0 left-0 w-full px-4 pt-4 pb-6 bg-app-bg/95 backdrop-blur-md z-50 border-t border-white/5">
+        <button id="main-btn" class="w-full max-w-md mx-auto bg-app-primary text-white font-bold py-4 rounded-xl shadow-[0_4px_15px_rgba(139,92,246,0.4)] flex items-center justify-center gap-2 transition-transform active:scale-95">Next Step <span class="material-symbols-outlined">chevron_right</span></button>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
