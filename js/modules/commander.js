@@ -62,7 +62,16 @@ function applyDJLPreset() {
 }
 
 function goToDecks() { 
-    if (state.deckData.length === 0) state.deckData = Array.from({ length: state.decks }, () => ({ name: '', colors: [] })); 
+    // FIX: Sincronizador dinámico del array de mazos con el número del contador de la Screen 1
+    if (state.deckData.length < state.decks) {
+        let diff = state.decks - state.deckData.length;
+        for(let i = 0; i < diff; i++) {
+            state.deckData.push({ name: '', colors: [] });
+        }
+    } else if (state.deckData.length > state.decks) {
+        state.deckData = state.deckData.slice(0, state.decks);
+    }
+    
     buildDeckDOM(); 
     switchScreen(2); 
 }
@@ -98,10 +107,21 @@ window.updateDeckName = function(i, val) {
 
 function loadDeck(di, li) { const d = [...baseDecks, ...state.savedDecks][li]; state.deckData[di] = { name: d.name, colors: [...d.colors] }; buildDeckDOM(); saveData(); }
 function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors.includes(mi) ? d.colors.filter(c => c !== mi) : [...d.colors, mi]; buildDeckDOM(); saveData(); }
-function removeDeck(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
-function addExtraDeck() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
 
-// FIX: Limpieza estricta. Solo guardamos si tiene nombre real y es 100% único. Sin auto-fill "Deck X".
+function removeDeck(i) { 
+    state.deckData.splice(i, 1); 
+    state.decks--; // Actualiza el número de decks de forma local si borras uno a uno
+    buildDeckDOM(); 
+    saveData(); 
+}
+
+function addExtraDeck() { 
+    state.decks++; 
+    state.deckData.push({ name: '', colors: [] }); 
+    buildDeckDOM(); 
+    saveData(); 
+}
+
 function syncDecksToLibrary() { 
     let allE = [...baseDecks, ...state.savedDecks]; 
     let nw = false; 
@@ -534,7 +554,6 @@ window.reassignDecks = reassignDecks;
 window.handleTapStart = handleTapStart;
 window.handleTapEnd = handleTapEnd;
 
-// FIX: Validación de errores de UI (Shake Effect) antes de avanzar
 export function handleCommanderNext() {
     if (state.step === 1) { 
         state.playerLocks = []; state.playerBans = []; 
@@ -555,7 +574,7 @@ export function handleCommanderNext() {
             }
         });
         
-        if (hasErrors) return; // Bloquea el avance si hay mazos vacíos
+        if (hasErrors) return; 
         goToPlayers(); 
     } 
     else if (state.step === 3) { 

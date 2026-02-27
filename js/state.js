@@ -1,43 +1,49 @@
 // /js/state.js
 
-export let state = { 
-    gameMode: 'commander', step: 1, players: 2, decks: 7, 
-    deckData: [], tempPlayerNames: [], playerLocks: [], playerBans: [], 
-    savedPlayers: [], savedDecks: [], history: [], remainingDecks: [], currentMatch: [],
+const defaultState = {
+    gameMode: 'commander',
+    step: 1,
+    players: 2,
+    decks: 3, // FIX: Default a 3 mazos
+    deckData: [],
+    savedDecks: [],
+    tempPlayerNames: [],
+    savedPlayers: [],
+    playerLocks: [],
+    playerBans: [],
+    currentMatch: [],
+    remainingDecks: [],
+    undoStack: [],
+    history: [],
+    layoutMode: 'grid',
+    js: { count: 4, players: [], rounds: [], currentRound: 0, currentView: 'round', totalRounds: 0 },
     manaColors: [
-        {id:'W',cls:'mana-w',icon:`<i class="ms ms-w text-lg"></i>`},
-        {id:'U',cls:'mana-u',icon:`<i class="ms ms-u text-lg"></i>`},
-        {id:'B',cls:'mana-b',icon:`<i class="ms ms-b text-lg"></i>`},
-        {id:'R',cls:'mana-r',icon:`<i class="ms ms-r text-lg"></i>`},
-        {id:'G',cls:'mana-g',icon:`<i class="ms ms-g text-lg"></i>`}
-    ], 
-    matchFinished: false, startingLife: 40, layoutMode: 'cross', 
-    js: { count: 8, players: [], rounds: [], currentRound: 0, currentView: 'round', totalRounds: 3 }
+        { id: 'W', cls: 'mana-w', icon: '<i class="ms ms-w"></i>' },
+        { id: 'U', cls: 'mana-u', icon: '<i class="ms ms-u"></i>' },
+        { id: 'B', cls: 'mana-b', icon: '<i class="ms ms-b"></i>' },
+        { id: 'R', cls: 'mana-r', icon: '<i class="ms ms-r"></i>' },
+        { id: 'G', cls: 'mana-g', icon: '<i class="ms ms-g"></i>' }
+    ]
 };
 
-let saveTimeout;
-
-export function saveData() { 
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-        try {
-            localStorage.setItem('manafox-offline-state', JSON.stringify(state));
-        } catch(e) { console.warn("Local storage full or disabled."); }
-    }, 150);
-}
+export let state = JSON.parse(JSON.stringify(defaultState));
 
 export function loadLocalState() {
     try {
-        const stored = localStorage.getItem('manafox-offline-state');
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            state = { ...state, ...parsed }; 
-            if (!state.playerBans) state.playerBans = [];
+        const local = localStorage.getItem('manafox-offline-state');
+        if (local) {
+            const parsed = JSON.parse(local);
+            state = { ...state, ...parsed };
         }
-    } catch(e) {}
+    } catch (e) { console.warn("Error loading state", e); }
+}
+
+export function saveData() {
+    try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } 
+    catch (e) { console.warn("Error saving state", e); }
 }
 
 export function resetLocalState() {
     localStorage.removeItem('manafox-offline-state');
-    window.location.reload();
+    location.reload();
 }
