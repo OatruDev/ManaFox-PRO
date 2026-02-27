@@ -105,7 +105,7 @@ function renderAndOpenModeHub() {
             </button>
             <button id="btn-mode-mkt" class="w-full bg-app-surface-light hover:bg-white/10 border border-app-market/40 rounded-2xl p-4 flex items-center gap-4 transition active:scale-95 text-left">
                 <div class="size-12 rounded-full bg-app-market/20 text-app-market flex items-center justify-center flex-none"><span class="material-symbols-outlined">storefront</span></div>
-                <div><h4 class="font-black text-white">Sealed Market</h4><p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">Live Scryfall Sync</p></div>
+                <div><h4 class="font-black text-white">Market Hub</h4><p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">Live Scryfall Sync</p></div>
             </button>
         </div>
         <button id="btn-close-hub" class="w-full mt-6 bg-transparent text-slate-500 hover:text-white transition py-3 font-bold uppercase tracking-widest">Cancel</button>

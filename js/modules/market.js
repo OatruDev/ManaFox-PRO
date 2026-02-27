@@ -1,5 +1,6 @@
 // /js/modules/market.js
 import { mfModal } from '../ui.js';
+import { esc } from '../security.js';
 
 let videoStream = null;
 
@@ -24,7 +25,7 @@ window.closeMarketHub = function() {
 }
 
 // ==========================================
-// MÓDULO WEBRTC (CÁMARA)
+// MÓDULO WEBRTC (CÁMARA REPARADA MÓVIL)
 // ==========================================
 
 window.startScanner = async function() {
@@ -33,22 +34,31 @@ window.startScanner = async function() {
     const video = document.getElementById('scanner-video');
 
     try {
-        // Pedimos permiso para la cámara trasera (environment)
+        // FIX: Usamos "ideal: environment" en lugar de constraints estrictos
+        // Esto evita que iOS Safari tire un OverconstrainedError y bloquee la cámara.
         videoStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', focusMode: "continuous" },
+            video: { facingMode: { ideal: "environment" } },
             audio: false
         });
         
         video.srcObject = videoStream;
         
-        // Transición de UI
         mainView.classList.add('hidden');
         scannerView.classList.remove('hidden');
         scannerView.classList.add('flex');
         
     } catch (err) {
-        console.error("Camera Error:", err);
-        mfModal.show("Camera Blocked", "Please allow camera access in your browser settings to scan cards.", "videocam_off");
+        console.warn("Primary Camera Error, trying fallback...", err);
+        try {
+            // Plan B: Si falla la trasera, pedimos cualquier cámara disponible.
+            videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            video.srcObject = videoStream;
+            mainView.classList.add('hidden');
+            scannerView.classList.remove('hidden');
+            scannerView.classList.add('flex');
+        } catch(fallbackErr) {
+            mfModal.show("Camera Blocked", "Please allow camera access in your browser settings to scan cards.", "videocam_off");
+        }
     }
 }
 
@@ -63,6 +73,61 @@ window.stopScanner = function() {
 }
 
 // ==========================================
+// BÚSQUEDA MANUAL (FORMULARIO RESTAURADO)
+// ==========================================
+
+window.searchMarketCard = async function() {
+    const input = document.getElementById('market-search-input');
+    const container = document.getElementById('market-results-container');
+    const query = input.value.trim();
+    
+    if (!query) return;
+
+    // Loading State
+    container.innerHTML = '<div class="text-center text-slate-500 py-8 animate-pulse"><span class="material-symbols-outlined text-4xl mb-2">sync</span><p class="text-xs uppercase tracking-widest font-bold">Searching Scryfall...</p></div>';
+
+    try {
+        const res = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        
+        if (data.object === "error") {
+            container.innerHTML = `<p class="text-red-400 text-center text-sm font-bold mt-4">No cards found for "${esc(query)}".</p>`;
+            return;
+        }
+
+        const cards = data.data.slice(0, 10); // Mostrar top 10
+        
+        container.innerHTML = cards.map(card => {
+            const price = card.prices.eur || card.prices.usd || "N/A";
+            // Si la API no da link directo de cardmarket, generamos un enlace de búsqueda
+            const cmUrl = card.purchase_uris?.cardmarket || `https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(card.name)}`;
+            
+            // Las cartas dobles guardan la imagen en otro sitio del JSON
+            const img = card.image_uris ? card.image_uris.normal : (card.card_faces && card.card_faces[0].image_uris ? card.card_faces[0].image_uris.normal : '');
+            
+            return `
+                <div class="bg-app-surface-light border border-white/5 p-3 rounded-xl flex gap-4 items-center shadow-sm">
+                    ${img ? `<img src="${img}" class="w-16 rounded-md shadow-md border border-white/10">` : '<div class="w-16 h-24 bg-white/5 rounded-md flex items-center justify-center"><span class="text-[8px] text-slate-500">NO IMG</span></div>'}
+                    <div class="flex-1 flex flex-col">
+                        <span class="font-black text-white text-sm leading-tight">${esc(card.name)}</span>
+                        <span class="text-[10px] text-app-market font-bold uppercase tracking-widest mt-0.5">${esc(card.set_name)}</span>
+                        <div class="flex justify-between items-center mt-3 border-t border-white/5 pt-2">
+                            <span class="text-white font-black">€${price}</span>
+                            <a href="${cmUrl}" target="_blank" rel="noopener noreferrer" class="bg-[#1e83f5] text-white text-[10px] font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1 shadow-md hover:bg-blue-400">
+                                <span class="material-symbols-outlined text-[12px]">shopping_cart</span> Buy
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (error) {
+        container.innerHTML = `<p class="text-red-400 text-center text-sm font-bold mt-4">API connection failed.</p>`;
+    }
+}
+
+// ==========================================
 // DUMMY BRIDGE: TENSORFLOW -> SCRYFALL
 // ==========================================
 
@@ -70,21 +135,15 @@ window.simulateCardScan = async function() {
     const video = document.getElementById('scanner-video');
     const canvas = document.getElementById('scanner-canvas');
     
-    // 1. Capturamos el frame de la cámara en el canvas oculto
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    // Aquí es donde irá la inyección de la imagen a TensorFlow/OpenCV
-    // const frameBase64 = canvas.toDataURL('image/jpeg');
-    
     window.stopScanner();
     mfModal.show("Processing", "Analyzing card frame using Optical Recognition...", "memory");
     
-    // Simulamos un retraso de procesamiento de 1.5 segundos
     setTimeout(async () => {
         try {
-            // 2. Dummy Query a Scryfall (Simulamos que el OCR detectó "Black Lotus")
             const searchName = "Black Lotus"; 
             const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(searchName)}`);
             const cardData = await response.json();
@@ -124,11 +183,10 @@ window.fetchUpcomingSets = async function() {
         const res = await fetch('https://api.scryfall.com/sets');
         const data = await res.json();
         
-        // Filtramos para obtener solo expansiones Core o Commander reales
         const validSets = data.data.filter(set => ['core', 'expansion', 'commander'].includes(set.set_type)).slice(0, 10);
         
         container.innerHTML = validSets.map(set => `
-            <a href="https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(set.name)}" target="_blank" rel="noopener noreferrer" class="block bg-app-surface-light border border-white/5 p-4 rounded-xl hover:border-app-market/50 hover:bg-white/5 transition-all group">
+            <a href="https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(set.name)}" target="_blank" rel="noopener noreferrer" class="block bg-app-surface-light border border-white/5 p-4 rounded-xl hover:border-app-market/50 hover:bg-white/5 transition-all group shadow-sm">
                 <div class="flex justify-between items-center">
                     <div class="flex flex-col">
                         <span class="font-black text-white text-sm group-hover:text-app-market transition-colors">${esc(set.name)}</span>
