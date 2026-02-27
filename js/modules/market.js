@@ -4,7 +4,7 @@ import { esc } from '../security.js';
 
 let videoStream = null;
 
-// Estados Globales del Modal de Variantes
+// Estados Globales
 window.scannedVariants = [];
 window.currentVariantIdx = 0;
 window.isFoilSelected = false;
@@ -47,7 +47,6 @@ window.startScanner = async function() {
         mainView.classList.add('hidden');
         scannerView.classList.remove('hidden');
         scannerView.classList.add('flex');
-        
     } catch (err) {
         console.warn("Primary Camera Error, trying fallback...", err);
         try {
@@ -57,7 +56,7 @@ window.startScanner = async function() {
             scannerView.classList.remove('hidden');
             scannerView.classList.add('flex');
         } catch(fallbackErr) {
-            mfModal.show("Camera Blocked", "Please allow camera access in your browser settings to scan cards.", "videocam_off");
+            mfModal.show("Camera Blocked", "Please allow camera access to scan cards.", "videocam_off");
         }
     }
 }
@@ -73,60 +72,76 @@ window.stopScanner = function() {
 }
 
 // ==========================================
-// TESSERACT.JS OCR & SCRYFALL UNIQUE PRINTS
+// TESSERACT.JS OCR & FUZZY SEARCH
 // ==========================================
 
 window.processCardScan = async function() {
     const video = document.getElementById('scanner-video');
     const canvas = document.getElementById('scanner-canvas');
     
-    // Si el video no ha cargado, evitamos que crashee
-    if (!video || video.videoWidth === 0) return;
+    if (!video || video.videoWidth === 0) {
+        return mfModal.show("Camera Error", "Video feed is not ready.", "error");
+    }
 
-    // 1. RECORTE ESTRATÉGICO (Cropping)
-    // Extraemos SOLO el 25% central del frame para no saturar la RAM del móvil
-    const cropHeight = video.videoHeight * 0.25;
-    const cropY = (video.videoHeight - cropHeight) / 2;
+    // 1. RECORTE EXACTO: Capturamos solo el 30% central para no saturar el móvil.
+    const cropH = video.videoHeight * 0.30;
+    const cropY = (video.videoHeight - cropH) / 2;
     
     canvas.width = video.videoWidth;
-    canvas.height = cropHeight;
+    canvas.height = cropH;
     const ctx = canvas.getContext('2d');
     
-    // Dibujamos solo esa franja central en nuestro canvas oculto
-    ctx.drawImage(video, 0, cropY, video.videoWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+    // Dibujamos el video en el canvas
+    ctx.drawImage(video, 0, cropY, video.videoWidth, cropH, 0, 0, canvas.width, canvas.height);
 
-    // Damos feedback instantáneo para que el usuario sepa que el botón funcionó
+    // Creamos una foto Base64 para mostrarla en caso de error (Debug Mode)
+    const debugImageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+
     window.stopScanner();
-    mfModal.show("AI Engine", "Processing image...\n(May take 5-10s to download model on first run)", "document_scanner");
+    mfModal.show("AI Engine Active", "Reading text...\n(If this is the first time, downloading AI model takes a few seconds).", "document_scanner");
     
     try {
-        // Ejecución Tesseract sin filtros destructivos
         const worker = await Tesseract.createWorker('eng');
         const ret = await worker.recognize(canvas);
         await worker.terminate();
         
-        // Limpieza de cadena estricta (Letras, números, comas y guiones típicos de MTG)
+        // Limpiamos la lectura y ordenamos por las líneas más largas
         let lines = ret.data.text.split('\n')
                         .map(l => l.replace(/[^a-zA-Z0-9 ',.-]/g, '').trim())
-                        .filter(l => l.length > 2); // Filtramos basura de 1-2 caracteres
+                        .filter(l => l.length > 4); 
                         
+        // Asumimos que la línea más larga es el título de la carta
+        lines.sort((a, b) => b.length - a.length);
         let extractedName = lines.length > 0 ? lines[0] : "";
 
+        // Si falló leyendo o no encontró nada, disparamos el DEBUG UI.
+        const failHtml = `
+            <div class="flex flex-col items-center gap-2 mt-2 w-full">
+                <p class="text-[10px] text-slate-400 uppercase tracking-widest mb-1">What the AI saw:</p>
+                <img src="${debugImageBase64}" class="w-full rounded border border-red-500/50 shadow-md">
+                <div class="w-full bg-white/5 p-3 rounded-lg border border-white/10 mt-2">
+                    <p class="text-[10px] text-slate-500 uppercase font-bold">Extracted Text:</p>
+                    <p class="text-sm font-black text-white mt-1">"${extractedName || 'None'}"</p>
+                </div>
+                <p class="text-xs text-slate-400 mt-2 italic text-center">Ensure good lighting and hold still.</p>
+            </div>
+        `;
+
         if (!extractedName) {
-            return mfModal.show("Scan Failed", "No clear text detected. Please align the title inside the laser zone and avoid glare.", "warning");
+            return mfModal.show("Scan Failed", "", "warning", "custom", failHtml);
         }
 
-        mfModal.show("Fetching variants...", `Title recognized:\n"${extractedName}"`, "sync");
+        mfModal.show("Searching Scryfall...", `Query: "${extractedName}"`, "sync");
 
-        // Búsqueda en Scryfall de impresiones únicas
-        const response = await fetch(`https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(extractedName)}"&unique=prints`);
+        // FIX: Búsqueda FUZZY. Quitamos el ! y las comillas exactas. 
+        // Si Tesseract leyó "Strefan Maurer Frogenitor", Scryfall lo encontrará igual.
+        const response = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(extractedName)}&unique=prints`);
         const scryfallData = await response.json();
         
         if (scryfallData.object === "error") {
-            return mfModal.show("Not Found", `Scryfall couldn't find:\n"${extractedName}"\n\nTry manual search.`, "search_off");
+            return mfModal.show("Not Found in Database", "", "search_off", "custom", failHtml);
         }
 
-        // Carga de Estados Globales y Render del Carrusel
         window.scannedVariants = scryfallData.data;
         window.currentVariantIdx = 0;
         window.isFoilSelected = false;
@@ -135,7 +150,7 @@ window.processCardScan = async function() {
 
     } catch (error) {
         console.error("OCR Error:", error);
-        mfModal.show("Error", "The AI Engine crashed or failed to load. Check your connection.", "error");
+        mfModal.show("Error", "The AI Engine crashed. Check your connection.", "error");
     }
 }
 
@@ -220,7 +235,7 @@ mfModal.hide = function() {
 }
 
 // ==========================================
-// BÚSQUEDA MANUAL
+// BÚSQUEDA MANUAL & BROWSE
 // ==========================================
 
 window.searchMarketCard = async function() {
@@ -267,9 +282,6 @@ window.searchMarketCard = async function() {
     }
 }
 
-// ==========================================
-// BROWSE SETS
-// ==========================================
 window.fetchUpcomingSets = async function() {
     const container = document.getElementById('market-results-container');
     container.innerHTML = '<div class="text-center text-slate-500 py-8 animate-pulse"><span class="material-symbols-outlined text-4xl mb-2">sync</span><p class="text-xs uppercase tracking-widest font-bold">Fetching Scryfall...</p></div>';
