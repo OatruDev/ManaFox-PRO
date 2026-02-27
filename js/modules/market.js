@@ -80,50 +80,53 @@ window.processCardScan = async function() {
     const video = document.getElementById('scanner-video');
     const canvas = document.getElementById('scanner-canvas');
     
-    // Captura de Frame
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Filtro B/N agresivo para ayudar al OCR a leer fuentes de MTG
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imgData.data;
-    for (let i = 0; i < data.length; i += 4) {
-        let brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
-        let threshold = brightness > 128 ? 255 : 0;
-        data[i] = threshold; data[i + 1] = threshold; data[i + 2] = threshold;
-    }
-    ctx.putImageData(imgData, 0, 0);
+    // Si el video no ha cargado, evitamos que crashee
+    if (!video || video.videoWidth === 0) return;
 
+    // 1. RECORTE ESTRATÉGICO (Cropping)
+    // Extraemos SOLO el 25% central del frame para no saturar la RAM del móvil
+    const cropHeight = video.videoHeight * 0.25;
+    const cropY = (video.videoHeight - cropHeight) / 2;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = cropHeight;
+    const ctx = canvas.getContext('2d');
+    
+    // Dibujamos solo esa franja central en nuestro canvas oculto
+    ctx.drawImage(video, 0, cropY, video.videoWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+
+    // Damos feedback instantáneo para que el usuario sepa que el botón funcionó
     window.stopScanner();
-    mfModal.show("Scanning...", "Initializing Tesseract AI. This may take a moment the first time.", "document_scanner");
+    mfModal.show("AI Engine", "Processing image...\n(May take 5-10s to download model on first run)", "document_scanner");
     
     try {
-        // Ejecución Tesseract
+        // Ejecución Tesseract sin filtros destructivos
         const worker = await Tesseract.createWorker('eng');
         const ret = await worker.recognize(canvas);
         await worker.terminate();
         
-        // Limpieza de cadena (Nos quedamos con la primera línea más larga)
-        let lines = ret.data.text.split('\n').map(l => l.replace(/[^a-zA-Z0-9 ',.-]/g, '').trim()).filter(l => l.length > 3);
+        // Limpieza de cadena estricta (Letras, números, comas y guiones típicos de MTG)
+        let lines = ret.data.text.split('\n')
+                        .map(l => l.replace(/[^a-zA-Z0-9 ',.-]/g, '').trim())
+                        .filter(l => l.length > 2); // Filtramos basura de 1-2 caracteres
+                        
         let extractedName = lines.length > 0 ? lines[0] : "";
 
         if (!extractedName) {
-            return mfModal.show("Scan Failed", "Could not read the card name. Ensure good lighting and no glare.", "warning");
+            return mfModal.show("Scan Failed", "No clear text detected. Please align the title inside the laser zone and avoid glare.", "warning");
         }
 
-        mfModal.show("Fetching variants...", `Title recognized: "${extractedName}"`, "sync");
+        mfModal.show("Fetching variants...", `Title recognized:\n"${extractedName}"`, "sync");
 
-        // Búsqueda en Scryfall: ! obliga al nombre exacto/fuzzy, y unique=prints trae todas las versiones
+        // Búsqueda en Scryfall de impresiones únicas
         const response = await fetch(`https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(extractedName)}"&unique=prints`);
         const scryfallData = await response.json();
         
         if (scryfallData.object === "error") {
-            return mfModal.show("Not Found", `Scryfall couldn't find a card matching: "${extractedName}". Try manual search.`, "search_off");
+            return mfModal.show("Not Found", `Scryfall couldn't find:\n"${extractedName}"\n\nTry manual search.`, "search_off");
         }
 
-        // Carga de Estados Globales y Render
+        // Carga de Estados Globales y Render del Carrusel
         window.scannedVariants = scryfallData.data;
         window.currentVariantIdx = 0;
         window.isFoilSelected = false;
@@ -131,8 +134,8 @@ window.processCardScan = async function() {
         window.renderVariantModal();
 
     } catch (error) {
-        console.error(error);
-        mfModal.show("Error", "The AI Engine crashed or you lost connection.", "error");
+        console.error("OCR Error:", error);
+        mfModal.show("Error", "The AI Engine crashed or failed to load. Check your connection.", "error");
     }
 }
 
@@ -154,7 +157,6 @@ window.renderVariantModal = function() {
     const cmUrl = card.purchase_uris?.cardmarket || `https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(card.name)}`;
     const imgLg = card.image_uris ? card.image_uris.normal : (card.card_faces ? card.card_faces[0].image_uris.normal : '');
     
-    // Carrusel de miniaturas (Solo se renderiza si hay más de 1 versión)
     let thumbsHtml = '';
     if(window.scannedVariants.length > 1) {
         thumbsHtml = `
@@ -196,7 +198,6 @@ window.renderVariantModal = function() {
 
     mfModal.show("Scanner Result", "", "check_circle", "custom", html);
     
-    // Ocultar el icono gigante por defecto del Modal porque interfiere con la UI
     const modalIcon = document.getElementById('mf-modal-icon');
     if(modalIcon) modalIcon.style.display = 'none';
 }
@@ -211,10 +212,9 @@ window.toggleFoil = function(isFoil) {
     window.renderVariantModal();
 }
 
-// Restaura el modal a la normalidad cuando se cierra
 const originalHide = mfModal.hide;
 mfModal.hide = function() {
-    originalHide();
+    if(originalHide) originalHide();
     const modalIcon = document.getElementById('mf-modal-icon');
     if(modalIcon) modalIcon.style.display = 'block';
 }
