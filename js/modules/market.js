@@ -4,6 +4,11 @@ import { esc } from '../security.js';
 
 let videoStream = null;
 
+// Estados Globales del Modal de Variantes
+window.scannedVariants = [];
+window.currentVariantIdx = 0;
+window.isFoilSelected = false;
+
 export function openMarketHub() {
     const modal = document.getElementById('market-modal');
     document.getElementById('market-main-view').classList.remove('hidden');
@@ -11,7 +16,7 @@ export function openMarketHub() {
     
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    setTimeout(() => modal.classList.remove('opacity-0'), 50); // Fade in
+    setTimeout(() => modal.classList.remove('opacity-0'), 50);
 }
 
 window.openMarketHub = openMarketHub;
@@ -25,7 +30,7 @@ window.closeMarketHub = function() {
 }
 
 // ==========================================
-// MÓDULO WEBRTC (CÁMARA REPARADA MÓVIL)
+// CÁMARA WEBRTC
 // ==========================================
 
 window.startScanner = async function() {
@@ -34,15 +39,11 @@ window.startScanner = async function() {
     const video = document.getElementById('scanner-video');
 
     try {
-        // FIX: Usamos "ideal: environment" en lugar de constraints estrictos
-        // Esto evita que iOS Safari tire un OverconstrainedError y bloquee la cámara.
         videoStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: "environment" } },
             audio: false
         });
-        
         video.srcObject = videoStream;
-        
         mainView.classList.add('hidden');
         scannerView.classList.remove('hidden');
         scannerView.classList.add('flex');
@@ -50,7 +51,6 @@ window.startScanner = async function() {
     } catch (err) {
         console.warn("Primary Camera Error, trying fallback...", err);
         try {
-            // Plan B: Si falla la trasera, pedimos cualquier cámara disponible.
             videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             video.srcObject = videoStream;
             mainView.classList.add('hidden');
@@ -73,17 +73,162 @@ window.stopScanner = function() {
 }
 
 // ==========================================
-// BÚSQUEDA MANUAL (FORMULARIO RESTAURADO)
+// TESSERACT.JS OCR & SCRYFALL UNIQUE PRINTS
+// ==========================================
+
+window.processCardScan = async function() {
+    const video = document.getElementById('scanner-video');
+    const canvas = document.getElementById('scanner-canvas');
+    
+    // Captura de Frame
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Filtro B/N agresivo para ayudar al OCR a leer fuentes de MTG
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        let brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
+        let threshold = brightness > 128 ? 255 : 0;
+        data[i] = threshold; data[i + 1] = threshold; data[i + 2] = threshold;
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    window.stopScanner();
+    mfModal.show("Scanning...", "Initializing Tesseract AI. This may take a moment the first time.", "document_scanner");
+    
+    try {
+        // Ejecución Tesseract
+        const worker = await Tesseract.createWorker('eng');
+        const ret = await worker.recognize(canvas);
+        await worker.terminate();
+        
+        // Limpieza de cadena (Nos quedamos con la primera línea más larga)
+        let lines = ret.data.text.split('\n').map(l => l.replace(/[^a-zA-Z0-9 ',.-]/g, '').trim()).filter(l => l.length > 3);
+        let extractedName = lines.length > 0 ? lines[0] : "";
+
+        if (!extractedName) {
+            return mfModal.show("Scan Failed", "Could not read the card name. Ensure good lighting and no glare.", "warning");
+        }
+
+        mfModal.show("Fetching variants...", `Title recognized: "${extractedName}"`, "sync");
+
+        // Búsqueda en Scryfall: ! obliga al nombre exacto/fuzzy, y unique=prints trae todas las versiones
+        const response = await fetch(`https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(extractedName)}"&unique=prints`);
+        const scryfallData = await response.json();
+        
+        if (scryfallData.object === "error") {
+            return mfModal.show("Not Found", `Scryfall couldn't find a card matching: "${extractedName}". Try manual search.`, "search_off");
+        }
+
+        // Carga de Estados Globales y Render
+        window.scannedVariants = scryfallData.data;
+        window.currentVariantIdx = 0;
+        window.isFoilSelected = false;
+        
+        window.renderVariantModal();
+
+    } catch (error) {
+        console.error(error);
+        mfModal.show("Error", "The AI Engine crashed or you lost connection.", "error");
+    }
+}
+
+// ==========================================
+// CARRUSEL DE VARIANTES & FOIL TOGGLE
+// ==========================================
+
+window.renderVariantModal = function() {
+    if(!window.scannedVariants || window.scannedVariants.length === 0) return;
+    
+    const card = window.scannedVariants[window.currentVariantIdx];
+    const priceKey = window.isFoilSelected ? 'eur_foil' : 'eur';
+    const fallbackKey = window.isFoilSelected ? 'usd_foil' : 'usd';
+    
+    let price = card.prices[priceKey];
+    if(!price) price = card.prices[fallbackKey];
+    const displayPrice = price ? `€${price}` : "N/A";
+    
+    const cmUrl = card.purchase_uris?.cardmarket || `https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(card.name)}`;
+    const imgLg = card.image_uris ? card.image_uris.normal : (card.card_faces ? card.card_faces[0].image_uris.normal : '');
+    
+    // Carrusel de miniaturas (Solo se renderiza si hay más de 1 versión)
+    let thumbsHtml = '';
+    if(window.scannedVariants.length > 1) {
+        thumbsHtml = `
+            <p class="text-[9px] text-slate-400 uppercase tracking-widest mt-4 mb-2">Swipe to select edition</p>
+            <div class="flex gap-2 overflow-x-auto no-scrollbar w-full py-2 snap-x">
+                ${window.scannedVariants.map((c, i) => {
+                    const thumb = c.image_uris ? c.image_uris.small : (c.card_faces ? c.card_faces[0].image_uris.small : '');
+                    const isActive = i === window.currentVariantIdx;
+                    return `<img src="${thumb}" onclick="window.selectVariant(${i})" class="w-16 rounded-md shadow-md cursor-pointer snap-center transition-all ${isActive ? 'border-2 border-app-market scale-110 opacity-100' : 'border-2 border-transparent opacity-50 hover:opacity-100'}">`;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    const html = `
+        <div class="flex flex-col items-center w-full mt-2">
+            <h4 class="font-black text-white text-lg mb-0.5 text-center">${esc(card.name)}</h4>
+            <span class="text-[10px] text-app-market font-bold uppercase tracking-widest mb-4 text-center">${esc(card.set_name)} (${card.collector_number})</span>
+            
+            <img src="${imgLg}" class="w-48 rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.8)] border border-white/20 mb-4 transition-all">
+            
+            <div class="flex bg-black p-1 rounded-lg border border-white/10 w-full max-w-[200px] mb-4">
+                <button onclick="window.toggleFoil(false)" class="flex-1 text-xs py-1.5 rounded-md font-bold transition-colors ${!window.isFoilSelected ? 'bg-app-surface-light text-white' : 'text-slate-500'}">Normal</button>
+                <button onclick="window.toggleFoil(true)" class="flex-1 text-xs py-1.5 rounded-md font-bold transition-colors ${window.isFoilSelected ? 'bg-gradient-to-r from-purple-500 to-app-market text-white' : 'text-slate-500'}">Foil ✦</button>
+            </div>
+
+            <div class="text-center w-full bg-white/5 p-3 rounded-xl border border-white/10">
+                <span class="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-1">Market Trend</span>
+                <span class="text-3xl font-black ${window.isFoilSelected ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-emerald-400' : 'text-white'}">${displayPrice}</span>
+            </div>
+            
+            ${thumbsHtml}
+
+            <a href="${cmUrl}" target="_blank" rel="noopener noreferrer" class="w-full bg-[#1e83f5] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition mt-4 shadow-lg hover:bg-blue-400">
+                <span class="material-symbols-outlined">shopping_cart</span> View on Cardmarket
+            </a>
+        </div>
+    `;
+
+    mfModal.show("Scanner Result", "", "check_circle", "custom", html);
+    
+    // Ocultar el icono gigante por defecto del Modal porque interfiere con la UI
+    const modalIcon = document.getElementById('mf-modal-icon');
+    if(modalIcon) modalIcon.style.display = 'none';
+}
+
+window.selectVariant = function(idx) {
+    window.currentVariantIdx = idx;
+    window.renderVariantModal();
+}
+
+window.toggleFoil = function(isFoil) {
+    window.isFoilSelected = isFoil;
+    window.renderVariantModal();
+}
+
+// Restaura el modal a la normalidad cuando se cierra
+const originalHide = mfModal.hide;
+mfModal.hide = function() {
+    originalHide();
+    const modalIcon = document.getElementById('mf-modal-icon');
+    if(modalIcon) modalIcon.style.display = 'block';
+}
+
+// ==========================================
+// BÚSQUEDA MANUAL
 // ==========================================
 
 window.searchMarketCard = async function() {
     const input = document.getElementById('market-search-input');
     const container = document.getElementById('market-results-container');
     const query = input.value.trim();
-    
     if (!query) return;
 
-    // Loading State
     container.innerHTML = '<div class="text-center text-slate-500 py-8 animate-pulse"><span class="material-symbols-outlined text-4xl mb-2">sync</span><p class="text-xs uppercase tracking-widest font-bold">Searching Scryfall...</p></div>';
 
     try {
@@ -95,14 +240,10 @@ window.searchMarketCard = async function() {
             return;
         }
 
-        const cards = data.data.slice(0, 10); // Mostrar top 10
-        
+        const cards = data.data.slice(0, 10);
         container.innerHTML = cards.map(card => {
             const price = card.prices.eur || card.prices.usd || "N/A";
-            // Si la API no da link directo de cardmarket, generamos un enlace de búsqueda
             const cmUrl = card.purchase_uris?.cardmarket || `https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(card.name)}`;
-            
-            // Las cartas dobles guardan la imagen en otro sitio del JSON
             const img = card.image_uris ? card.image_uris.normal : (card.card_faces && card.card_faces[0].image_uris ? card.card_faces[0].image_uris.normal : '');
             
             return `
@@ -121,59 +262,13 @@ window.searchMarketCard = async function() {
                 </div>
             `;
         }).join('');
-
     } catch (error) {
         container.innerHTML = `<p class="text-red-400 text-center text-sm font-bold mt-4">API connection failed.</p>`;
     }
 }
 
 // ==========================================
-// DUMMY BRIDGE: TENSORFLOW -> SCRYFALL
-// ==========================================
-
-window.simulateCardScan = async function() {
-    const video = document.getElementById('scanner-video');
-    const canvas = document.getElementById('scanner-canvas');
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    window.stopScanner();
-    mfModal.show("Processing", "Analyzing card frame using Optical Recognition...", "memory");
-    
-    setTimeout(async () => {
-        try {
-            const searchName = "Black Lotus"; 
-            const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(searchName)}`);
-            const cardData = await response.json();
-            
-            if (cardData.object === "card") {
-                const price = cardData.prices.eur || cardData.prices.usd || "N/A";
-                const cmUrl = cardData.purchase_uris?.cardmarket || "#";
-                
-                const resultHtml = `
-                    <div class="flex flex-col items-center gap-4 mt-2">
-                        <img src="${cardData.image_uris.normal}" class="w-48 rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.8)] border border-white/20">
-                        <div class="text-center w-full bg-white/5 p-4 rounded-xl border border-white/10">
-                            <span class="text-[10px] font-black uppercase text-app-market tracking-widest block mb-1">Market Value</span>
-                            <span class="text-3xl font-black text-white">€${price}</span>
-                        </div>
-                        <a href="${cmUrl}" target="_blank" rel="noopener noreferrer" class="w-full bg-[#1e83f5] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition mt-2 shadow-lg">
-                            <span class="material-symbols-outlined">shopping_cart</span> Open in Cardmarket
-                        </a>
-                    </div>
-                `;
-                mfModal.show("Card Recognized!", `Found: ${cardData.name}`, "check_circle", "custom", resultHtml);
-            }
-        } catch (error) {
-            mfModal.show("Error", "Could not connect to Scryfall API.", "error");
-        }
-    }, 1500);
-}
-
-// ==========================================
-// BROWSE SETS (SCRYFALL API V3)
+// BROWSE SETS
 // ==========================================
 window.fetchUpcomingSets = async function() {
     const container = document.getElementById('market-results-container');
@@ -182,7 +277,6 @@ window.fetchUpcomingSets = async function() {
     try {
         const res = await fetch('https://api.scryfall.com/sets');
         const data = await res.json();
-        
         const validSets = data.data.filter(set => ['core', 'expansion', 'commander'].includes(set.set_type)).slice(0, 10);
         
         container.innerHTML = validSets.map(set => `
