@@ -7,16 +7,24 @@ import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme
 let wakeLock = null;
 
 async function requestWakeLock() {
-    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
-    catch (err) { console.warn("Wake Lock error:", err); }
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+        }
+    } catch (err) { console.warn("Wake Lock error:", err); }
 }
 
 function releaseWakeLock() {
-    if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }
+    if (wakeLock !== null) { 
+        wakeLock.release(); 
+        wakeLock = null; 
+    }
 }
 
 document.addEventListener('visibilitychange', async () => {
-    if (wakeLock !== null && document.visibilityState === 'visible' && state.step === 5) await requestWakeLock(); 
+    if (wakeLock !== null && document.visibilityState === 'visible' && state.step === 5) { 
+        await requestWakeLock(); 
+    }
 });
 
 export function initCommander() {
@@ -66,7 +74,7 @@ function buildDeckDOM() {
         const archName = getArchetype(d.colors);
         const colorsHTML = state.manaColors.map(m => `<button onclick="window.toggleColor(${i},'${m.id}')" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id) ? 'active' : 'opacity-30'}">${m.icon}</button>`).join(''); 
         c.innerHTML += `
-        <div class="bg-app-surface p-4 rounded-2xl border border-white/5 shadow-sm">
+        <div class="bg-app-surface p-4 rounded-2xl border border-white/5 shadow-sm transition-all duration-300" id="deck-wrapper-${i}">
             <div class="flex justify-between items-center mb-2">
                 <div class="flex flex-col">
                     <label class="text-[10px] font-bold text-app-primary uppercase">Deck #${i + 1}</label>
@@ -77,13 +85,12 @@ function buildDeckDOM() {
                     <button onclick="window.removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button>
                 </div>
             </div>
-            <input type="text" id="deck-input-${i}" maxlength="40" oninput="window.updateDeckName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white" value="${esc(d.name)}" placeholder="Name">
+            <input type="text" id="deck-input-${i}" maxlength="40" oninput="window.updateDeckName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white transition-all" value="${esc(d.name)}" placeholder="Deck Name (Required)">
             <div class="flex gap-2">${colorsHTML}</div>
         </div>`; 
     }); 
 }
 
-// FIX: Función expuesta para inyectar cada letra directo en la memoria
 window.updateDeckName = function(i, val) {
     state.deckData[i].name = val;
     saveData();
@@ -94,22 +101,22 @@ function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors
 function removeDeck(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
 function addExtraDeck() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
 
+// FIX: Limpieza estricta. Solo guardamos si tiene nombre real y es 100% único. Sin auto-fill "Deck X".
 function syncDecksToLibrary() { 
     let allE = [...baseDecks, ...state.savedDecks]; 
     let nw = false; 
     state.deckData.forEach((d, i) => { 
-        if (!d.name || d.name.trim() === "") d.name = `Deck ${i + 1}`; 
-        else d.name = d.name.trim();
-        
         const inputNode = document.getElementById(`deck-input-${i}`);
-        if (inputNode && inputNode.value !== d.name) inputNode.value = d.name;
+        if (inputNode && inputNode.value !== undefined) { d.name = inputNode.value.trim(); }
         
-        let isUnique = !allE.some(ex => ex.name.toLowerCase() === d.name.toLowerCase());
-        if (isUnique) { 
-            state.savedDecks.push({ name: d.name, colors: [...d.colors] }); 
-            allE.push({ name: d.name, colors: [...d.colors] });
-            nw = true; 
-        } 
+        if (d.name !== "") {
+            let isUnique = !allE.some(ex => ex.name.toLowerCase() === d.name.toLowerCase());
+            if (isUnique) { 
+                state.savedDecks.push({ name: d.name, colors: [...d.colors] }); 
+                allE.push({ name: d.name, colors: [...d.colors] });
+                nw = true; 
+            } 
+        }
     }); 
     if (nw) saveData(); 
 }
@@ -336,8 +343,6 @@ function renderBattlefield() {
             if (count === 6 && i === 2) rotDeg = 180; 
         } 
         
-        // FIX: Mapping absoluto. Independientemente de cómo estés sentado, 
-        // el TOP (centro de mesa) es el +, el BOTTOM (tu borde) es el -.
         let flexDir = 'flex-col'; let hitbox1 = '1'; let hitbox2 = '-1'; 
         if (rotDeg === 0) { flexDir = 'flex-col'; hitbox1 = '1'; hitbox2 = '-1'; }
         else if (rotDeg === 180) { flexDir = 'flex-col'; hitbox1 = '-1'; hitbox2 = '1'; }
@@ -435,7 +440,6 @@ async function checkEliminations() {
 
 let menuOpen = false;
 
-// FIX: Expansor Matemático para el Menú Lotus
 window.toggleCenterMenu = function() { 
     menuOpen = !menuOpen;
     const menu = document.getElementById('radial-menu-overlay');
@@ -446,8 +450,8 @@ window.toggleCenterMenu = function() {
             icon.innerText = 'close'; icon.classList.add('rotate-90');
             
             const btns = Array.from(menu.querySelectorAll('.radial-btn:not(.hidden)'));
-            const R = 95; // Radio de expansión
-            const startAngle = -Math.PI / 2; // -90 grados (Posición Top)
+            const R = 95; 
+            const startAngle = -Math.PI / 2; 
             const angleStep = (Math.PI * 2) / btns.length;
             
             btns.forEach((btn, index) => {
@@ -523,12 +527,14 @@ window.removeDeck = removeDeck;
 window.addExtraPlayer = addExtraPlayer;
 window.removePlayer = removePlayer;
 window.quickAdd = quickAdd;
+window.deleteSavedPlayer = deleteSavedPlayer;
 window.setPlayerLock = setPlayerLock;
 window.toggleBan = toggleBan;
 window.reassignDecks = reassignDecks;
 window.handleTapStart = handleTapStart;
 window.handleTapEnd = handleTapEnd;
 
+// FIX: Validación de errores de UI (Shake Effect) antes de avanzar
 export function handleCommanderNext() {
     if (state.step === 1) { 
         state.playerLocks = []; state.playerBans = []; 
@@ -536,6 +542,20 @@ export function handleCommanderNext() {
     } 
     else if (state.step === 2) { 
         syncDecksToLibrary(); 
+        
+        let hasErrors = false;
+        state.deckData.forEach((d, i) => {
+            if (d.name.trim() === "") {
+                hasErrors = true;
+                const el = document.getElementById(`deck-wrapper-${i}`);
+                if (el) {
+                    el.classList.add('shake-error');
+                    setTimeout(() => el.classList.remove('shake-error'), 400);
+                }
+            }
+        });
+        
+        if (hasErrors) return; // Bloquea el avance si hay mazos vacíos
         goToPlayers(); 
     } 
     else if (state.step === 3) { 

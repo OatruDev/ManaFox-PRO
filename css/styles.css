@@ -10,7 +10,6 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 
 .mana-btn { transition: all 0.2s; border: 2px solid transparent; }
 .mana-btn.active { border-color: #ffffff; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5); }
-/* FIX UX/UI: Todos los iconos son blancos. Fondos ajustados para contraste óptimo */
 .mana-w { background-color: #eab308 !important; color: #ffffff !important; }
 .mana-u { background-color: #3b82f6 !important; color: #ffffff !important; }
 .mana-b { background-color: #27272a !important; color: #ffffff !important; border-color: #52525b; }
@@ -55,3 +54,14 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 }
 .radial-btn span.material-symbols-outlined { font-size: 26px; margin-bottom: 2px; }
 .radial-btn span.lbl { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* --- UX ANIMATIONS --- */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+.shake-error {
+    animation: shake 0.4s ease-in-out;
+    box-shadow: inset 0 0 0 2px #ef4444 !important;
+}
