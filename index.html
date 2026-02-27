@@ -35,7 +35,57 @@
     </div>
 
     <div id="mode-modal" class="fixed inset-0 z-[90] bg-black/90 hidden flex items-center justify-center p-4 backdrop-blur-md"></div>
-    <div id="market-modal" class="fixed inset-0 z-[100] bg-black/95 hidden flex flex-col p-4 backdrop-blur-md"></div>
+    
+    <div id="market-modal" class="fixed inset-0 z-[100] bg-app-bg hidden flex-col overflow-hidden transition-opacity duration-300">
+        <div id="market-main-view" class="flex flex-col h-full w-full">
+            <header class="flex-none px-4 pt-10 pb-4 flex items-center justify-between border-b border-white/10 bg-black/50 backdrop-blur-md">
+                <button onclick="window.closeMarketHub()" class="size-10 rounded-full bg-white/5 text-white flex items-center justify-center hover:bg-white/10 transition active:scale-95"><span class="material-symbols-outlined">close</span></button>
+                <h2 class="text-xl font-black tracking-widest uppercase text-app-market drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]">Sealed Market</h2>
+                <div class="size-10"></div>
+            </header>
+            <div class="p-6 flex flex-col gap-4">
+                <p class="text-slate-400 text-sm mb-4">Live connection to Scryfall & Cardmarket.</p>
+                <button onclick="window.startScanner()" class="w-full bg-app-market text-black font-black py-6 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.4)] flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <span class="material-symbols-outlined text-4xl">document_scanner</span>
+                    <span class="uppercase tracking-widest text-xs">Scan Card (Beta)</span>
+                </button>
+                <button onclick="window.fetchUpcomingSets()" class="w-full bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl flex items-center justify-center gap-2 hover:border-white/30 active:scale-95 transition-all mt-2">
+                    <span class="material-symbols-outlined">box</span> Browse Latest Sets
+                </button>
+                <div id="market-results-container" class="mt-6 space-y-3 overflow-y-auto no-scrollbar pb-20"></div>
+            </div>
+        </div>
+
+        <div id="scanner-view" class="absolute inset-0 z-10 bg-black hidden flex-col hidden">
+            <video id="scanner-video" class="absolute inset-0 w-full h-full object-cover" autoplay playsinline muted></video>
+            
+            <div class="absolute inset-0 z-20 flex flex-col">
+                <div class="flex-1 bg-black/70 backdrop-blur-sm flex justify-between items-start p-6 pt-12">
+                    <button onclick="window.stopScanner()" class="size-12 rounded-full bg-black/50 border border-white/20 text-white flex items-center justify-center backdrop-blur-md active:scale-95 transition-transform"><span class="material-symbols-outlined">close</span></button>
+                    <div class="bg-black/50 border border-white/20 px-4 py-2 rounded-full backdrop-blur-md"><span class="text-app-market font-bold text-xs uppercase tracking-widest flex items-center gap-2"><span class="size-2 bg-app-market rounded-full animate-pulse"></span> OCR Active</span></div>
+                </div>
+                
+                <div class="h-[60svh] w-full flex items-center justify-center relative">
+                    <div class="w-[75vw] max-w-[350px] aspect-[2.5/3.5] relative">
+                        <div class="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-app-market rounded-tl-xl"></div>
+                        <div class="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-app-market rounded-tr-xl"></div>
+                        <div class="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-app-market rounded-bl-xl"></div>
+                        <div class="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-app-market rounded-br-xl"></div>
+                        <div class="laser-scanner absolute top-0 left-0 w-full h-0.5 bg-app-market shadow-[0_0_15px_rgba(16,185,129,1)]"></div>
+                    </div>
+                </div>
+                
+                <div class="flex-1 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center p-6 pb-12">
+                    <p class="text-white font-medium text-center mb-6 drop-shadow-md">Center the MTG card inside the frame.</p>
+                    <button onclick="window.simulateCardScan()" class="size-20 rounded-full border-4 border-white flex items-center justify-center bg-white/20 active:bg-white/50 transition-colors backdrop-blur-md">
+                        <div class="size-14 rounded-full bg-white"></div>
+                    </button>
+                </div>
+            </div>
+            <canvas id="scanner-canvas" class="hidden"></canvas>
+        </div>
+    </div>
+
     <div id="library-modal" class="fixed inset-0 z-[80] bg-black/90 hidden flex items-center justify-center p-4 backdrop-blur-md"></div>
 
     <header id="main-header" class="flex-none px-4 pt-10 pb-4 flex items-center justify-between sticky top-0 bg-transparent backdrop-blur-md z-50 transition-transform">

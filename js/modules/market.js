@@ -1,94 +1,144 @@
 // /js/modules/market.js
 import { mfModal } from '../ui.js';
-import { esc } from '../security.js';
 
-async function fetchScryfallSets() {
-    const setSelect = document.getElementById('market-quick-set');
-    if(!setSelect) return;
+let videoStream = null;
+
+export function openMarketHub() {
+    const modal = document.getElementById('market-modal');
+    document.getElementById('market-main-view').classList.remove('hidden');
+    document.getElementById('scanner-view').classList.add('hidden');
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('opacity-0'), 50); // Fade in
+}
+
+window.openMarketHub = openMarketHub;
+window.closeMarketHub = function() {
+    const modal = document.getElementById('market-modal');
+    modal.classList.add('opacity-0');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }, 300);
+}
+
+// ==========================================
+// MÓDULO WEBRTC (CÁMARA)
+// ==========================================
+
+window.startScanner = async function() {
+    const mainView = document.getElementById('market-main-view');
+    const scannerView = document.getElementById('scanner-view');
+    const video = document.getElementById('scanner-video');
+
+    try {
+        // Pedimos permiso para la cámara trasera (environment)
+        videoStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', focusMode: "continuous" },
+            audio: false
+        });
+        
+        video.srcObject = videoStream;
+        
+        // Transición de UI
+        mainView.classList.add('hidden');
+        scannerView.classList.remove('hidden');
+        scannerView.classList.add('flex');
+        
+    } catch (err) {
+        console.error("Camera Error:", err);
+        mfModal.show("Camera Blocked", "Please allow camera access in your browser settings to scan cards.", "videocam_off");
+    }
+}
+
+window.stopScanner = function() {
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+    }
+    document.getElementById('scanner-view').classList.add('hidden');
+    document.getElementById('scanner-view').classList.remove('flex');
+    document.getElementById('market-main-view').classList.remove('hidden');
+}
+
+// ==========================================
+// DUMMY BRIDGE: TENSORFLOW -> SCRYFALL
+// ==========================================
+
+window.simulateCardScan = async function() {
+    const video = document.getElementById('scanner-video');
+    const canvas = document.getElementById('scanner-canvas');
+    
+    // 1. Capturamos el frame de la cámara en el canvas oculto
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Aquí es donde irá la inyección de la imagen a TensorFlow/OpenCV
+    // const frameBase64 = canvas.toDataURL('image/jpeg');
+    
+    window.stopScanner();
+    mfModal.show("Processing", "Analyzing card frame using Optical Recognition...", "memory");
+    
+    // Simulamos un retraso de procesamiento de 1.5 segundos
+    setTimeout(async () => {
+        try {
+            // 2. Dummy Query a Scryfall (Simulamos que el OCR detectó "Black Lotus")
+            const searchName = "Black Lotus"; 
+            const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(searchName)}`);
+            const cardData = await response.json();
+            
+            if (cardData.object === "card") {
+                const price = cardData.prices.eur || cardData.prices.usd || "N/A";
+                const cmUrl = cardData.purchase_uris?.cardmarket || "#";
+                
+                const resultHtml = `
+                    <div class="flex flex-col items-center gap-4 mt-2">
+                        <img src="${cardData.image_uris.normal}" class="w-48 rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.8)] border border-white/20">
+                        <div class="text-center w-full bg-white/5 p-4 rounded-xl border border-white/10">
+                            <span class="text-[10px] font-black uppercase text-app-market tracking-widest block mb-1">Market Value</span>
+                            <span class="text-3xl font-black text-white">€${price}</span>
+                        </div>
+                        <a href="${cmUrl}" target="_blank" rel="noopener noreferrer" class="w-full bg-[#1e83f5] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition mt-2 shadow-lg">
+                            <span class="material-symbols-outlined">shopping_cart</span> Open in Cardmarket
+                        </a>
+                    </div>
+                `;
+                mfModal.show("Card Recognized!", `Found: ${cardData.name}`, "check_circle", "custom", resultHtml);
+            }
+        } catch (error) {
+            mfModal.show("Error", "Could not connect to Scryfall API.", "error");
+        }
+    }, 1500);
+}
+
+// ==========================================
+// BROWSE SETS (SCRYFALL API V3)
+// ==========================================
+window.fetchUpcomingSets = async function() {
+    const container = document.getElementById('market-results-container');
+    container.innerHTML = '<div class="text-center text-slate-500 py-8 animate-pulse"><span class="material-symbols-outlined text-4xl mb-2">sync</span><p class="text-xs uppercase tracking-widest font-bold">Fetching Scryfall...</p></div>';
+    
     try {
         const res = await fetch('https://api.scryfall.com/sets');
         const data = await res.json();
         
-        const validTypes = ['expansion', 'core', 'masters', 'draft_innovation'];
-        const blockList = ['alchemy', 'arena', 'online', 'mtgo', 'promo', 'token', 'art series', 'minigame', 'treasure', 'omenpaths', 'the big score'];
-        const upcoming = [
-            { name: "Teenage Mutant Ninja Turtles", short: "TMNT", date: "06/26" },
-            { name: "Secrets of Strixhaven", short: "Strixhaven", date: "03/26" },
-            { name: "Marvel's Super Heroes", short: "Marvel", date: "11/26" },
-            { name: "Lorwyn Eclipsed", short: "Lorwyn", date: "09/26" }
-        ];
+        // Filtramos para obtener solo expansiones Core o Commander reales
+        const validSets = data.data.filter(set => ['core', 'expansion', 'commander'].includes(set.set_type)).slice(0, 10);
         
-        const physicalSets = data.data.filter(s => {
-            if(s.digital === true) return false;
-            if(!validTypes.includes(s.set_type)) return false;
-            let n = s.name.toLowerCase();
-            if(blockList.some(b => n.includes(b))) return false;
-            return true;
-        }).sort((a,b) => new Date(b.released_at) - new Date(a.released_at)).slice(0, 40);
-        
-        let optionsHTML = '<option value="" disabled selected>Select an expansion...</option><optgroup label="Upcoming / Announced (2026)">';
-        upcoming.forEach(u => { optionsHTML += `<option value="${u.name}">${u.short} (${u.date})</option>`; });
-        optionsHTML += `</optgroup><optgroup label="Released Sets">`;
-        physicalSets.forEach(s => { 
-            let d = new Date(s.released_at);
-            let dStr = `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
-            optionsHTML += `<option value="${esc(s.name)}">${esc(s.name.substring(0,22))} (${dStr})</option>`; 
-        });
-        optionsHTML += `</optgroup>`;
-        setSelect.innerHTML = optionsHTML;
-    } catch(e) { setSelect.innerHTML = '<option value="" disabled selected>Error loading Scryfall DB.</option>'; }
-}
-
-export function openMarketHub() { 
-    const modal = document.getElementById('market-modal');
-    
-    if (modal.innerHTML.trim() === '') {
-        modal.innerHTML = `
-        <div class="bg-app-surface border border-app-market/30 rounded-3xl w-full max-w-sm mx-auto flex flex-col overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.15)] mt-20">
-            <div class="p-6 border-b border-white/5 flex justify-between items-center bg-app-surface-light/50">
-                <div>
-                    <h3 class="font-black text-2xl text-app-market tracking-widest uppercase flex items-center gap-2"><span class="material-symbols-outlined">storefront</span> Market</h3>
-                    <p class="text-[10px] text-slate-400 uppercase tracking-widest mt-1">Live from Scryfall API</p>
-                </div>
-                <button onclick="window.closeMarketHub()" class="text-slate-500 hover:text-white transition bg-white/5 size-10 rounded-full flex items-center justify-center"><span class="material-symbols-outlined">close</span></button>
-            </div>
-            <div class="p-6 space-y-6">
-                <div>
-                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Manual Search</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="market-set-name" class="w-full bg-app-surface-light border border-white/10 rounded-xl py-3 px-4 text-white focus:border-app-market focus:ring-1 focus:ring-app-market transition shadow-inner" placeholder="Any set name...">
-                        <button onclick="window.searchCardmarketManual()" class="bg-app-market text-black font-black px-4 rounded-xl shadow-lg active:scale-95 transition flex items-center justify-center"><span class="material-symbols-outlined">search</span></button>
+        container.innerHTML = validSets.map(set => `
+            <a href="https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(set.name)}" target="_blank" rel="noopener noreferrer" class="block bg-app-surface-light border border-white/5 p-4 rounded-xl hover:border-app-market/50 hover:bg-white/5 transition-all group">
+                <div class="flex justify-between items-center">
+                    <div class="flex flex-col">
+                        <span class="font-black text-white text-sm group-hover:text-app-market transition-colors">${esc(set.name)}</span>
+                        <span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">${set.code} • ${set.released_at}</span>
                     </div>
+                    <span class="material-symbols-outlined text-slate-600 group-hover:text-app-market transition-colors">open_in_new</span>
                 </div>
-                <hr class="border-white/5">
-                <div>
-                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Quick Find (Official Sets)</label>
-                    <div class="space-y-3">
-                        <select id="market-quick-set" class="w-full bg-app-surface-light border border-white/10 rounded-xl py-4 px-4 text-sm text-white focus:border-app-market transition appearance-none"><option value="" disabled selected>Loading sets from Scryfall...</option></select>
-                        <select id="market-quick-type" class="w-full bg-app-surface-light border border-white/10 rounded-xl py-4 px-4 text-sm text-white focus:border-app-market transition appearance-none">
-                            <option value="Booster Box">Play / Draft Booster Box</option>
-                            <option value="Collector Box">Collector Booster Box</option>
-                            <option value="Bundle">Bundle / Fat Pack</option>
-                            <option value="Jumpstart Box">Jumpstart Box</option>
-                            <option value="Commander Deck">Commander Deck</option>
-                        </select>
-                    </div>
-                    <button onclick="window.searchQuickCardmarket()" class="w-full mt-4 bg-app-market text-black font-black py-4 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.4)] active:scale-95 transition flex items-center justify-center gap-2">Find Product <span class="material-symbols-outlined text-lg">open_in_new</span></button>
-                </div>
-            </div>
-        </div>`;
-        fetchScryfallSets();
+            </a>
+        `).join('');
+    } catch (e) {
+        container.innerHTML = `<p class="text-red-400 text-center text-sm font-bold mt-4">Failed to load Market Data.</p>`;
     }
-    
-    document.getElementById('mode-modal').classList.add('hidden'); 
-    modal.classList.remove('hidden'); 
 }
-
-function searchCardmarketManual() { let setName = document.getElementById('market-set-name').value.trim(); if(!setName) return mfModal.show("Hold up", "Please enter a set name.", "warning"); let url = `https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(setName)}`; window.open(url, '_blank'); }
-function searchQuickCardmarket() { let setSel = document.getElementById('market-quick-set').value; let typeSel = document.getElementById('market-quick-type').value; if(!setSel) return mfModal.show("Hold up", "Please select an expansion from the list.", "warning"); let query = `${setSel} ${typeSel}`.trim(); let url = `https://www.cardmarket.com/en/Magic/Products/Search?searchString=${encodeURIComponent(query)}`; window.open(url, '_blank'); }
-function closeMarketHub() { document.getElementById('market-modal').classList.add('hidden'); }
-
-window.searchCardmarketManual = searchCardmarketManual;
-window.searchQuickCardmarket = searchQuickCardmarket;
-window.openMarketHub = openMarketHub;
-window.closeMarketHub = closeMarketHub;
