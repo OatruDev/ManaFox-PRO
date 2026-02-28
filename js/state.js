@@ -8,7 +8,6 @@ const defaultState = {
     deckData: [],
     savedDecks: [],
     tempPlayerNames: [],
-    // NUEVO: Array relacional. FOX-00001 reservado para ti.
     savedPlayers: [
         { id: "FOX-00001", name: "Daniel", addedAt: Date.now() }
     ],
@@ -37,9 +36,20 @@ export function loadLocalState() {
         if (local) {
             const parsed = JSON.parse(local);
             state = { ...state, ...parsed };
-            // Migración para usuarios antiguos (si los hay)
-            if(state.savedPlayers.length > 0 && typeof state.savedPlayers[0] === 'string') {
-                state.savedPlayers = state.savedPlayers.map(name => ({ id: `FOX-${Math.random().toString(36).substr(2,5).toUpperCase()}`, name: name, addedAt: Date.now() }));
+            
+            // FIX CRÍTICO: Migración a prueba de balas para datos antiguos
+            if (Array.isArray(state.savedPlayers)) {
+                state.savedPlayers = state.savedPlayers.map(p => {
+                    // Si es un string viejo, lo convertimos en Objeto ID
+                    if (typeof p === 'string') {
+                        return { id: `FOX-${Math.random().toString(36).substr(2,5).toUpperCase()}`, name: p, addedAt: Date.now() };
+                    }
+                    // Si es un objeto sin ID, se lo asignamos
+                    if (p && typeof p === 'object' && !p.id) {
+                        p.id = `FOX-${Math.random().toString(36).substr(2,5).toUpperCase()}`;
+                    }
+                    return p;
+                }).filter(p => p && p.name); // Limpieza de errores nulos
             }
         }
     } catch (e) { console.warn("Error loading state", e); }

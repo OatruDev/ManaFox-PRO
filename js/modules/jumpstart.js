@@ -2,7 +2,7 @@
 import { state, saveData } from '../state.js';
 import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
-import { GIFS, winQuotes, triggerConfetti } from '../utils.js';
+import { GIFS, winQuotes, triggerConfetti, generatePlayerID } from '../utils.js';
 
 export function initJumpstart() {
     if(state.step === 7) { /* Screen is ready in HTML */ }
@@ -21,8 +21,11 @@ export function handleJumpstartNext() {
         }
         let nwP=false;
         state.tempPlayerNames.forEach(pN => {
-            if(!state.savedPlayers.some(p => p.toLowerCase() === pN.toLowerCase())) {
-                state.savedPlayers.push(pN); nwP=true;
+            // FIX CRÍTICO: Buscar y guardar Objetos en lugar de Strings viejos
+            let exists = state.savedPlayers.find(p => p.name && p.name.toLowerCase() === pN.toLowerCase());
+            if(!exists) {
+                state.savedPlayers.push({ id: generatePlayerID(), name: pN, addedAt: Date.now() }); 
+                nwP=true;
             }
         });
         if(nwP) saveData();
@@ -59,7 +62,12 @@ function goToJSPlayers() {
 function renderJSSavedPlayers() {
     const c = document.getElementById('js-saved-players-container');
     if(!c) return;
-    c.innerHTML = state.savedPlayers.map((p,i)=>`<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAddJS('${esc(p)}')" class="setup-input size-12 rounded-full border border-app-js/40 bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-js/20">${esc(p[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(p)}</span></div>`).join('');
+    // FIX: Renderizado antibalas, da igual si p es string viejo u objeto
+    c.innerHTML = state.savedPlayers.map((p,i)=> {
+        let pName = typeof p === 'string' ? p : (p.name || 'Unknown');
+        let initial = pName.length > 0 ? pName[0].toUpperCase() : '?';
+        return `<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAddJS('${esc(pName)}')" class="setup-input size-12 rounded-full border border-app-js/40 bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-js/20">${esc(initial)}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(pName)}</span></div>`;
+    }).join('');
 }
 
 function quickAddJS(n) {
@@ -94,7 +102,6 @@ function generateNextSwissRound() {
 
 function setJSView(view) { state.js.currentView = view; renderJSSwiss(); saveData(); }
 
-// FIX: Función de etiquetado de Desempate Head-to-Head
 function assignTieBreakers(sortedPlayers) {
     for(let i = 0; i < sortedPlayers.length; i++) {
         sortedPlayers[i].tieReason = null;
@@ -102,7 +109,7 @@ function assignTieBreakers(sortedPlayers) {
         if (tiedWith.length > 0) {
             let defeatedNames = tiedWith.filter(t => sortedPlayers[i].defeated && sortedPlayers[i].defeated.includes(t.name)).map(t => t.name);
             if (defeatedNames.length > 0) {
-                sortedPlayers[i].tieReason = `Head-to-Head win vs ${defeatedNames.join(', ')}`;
+                sortedPlayers[i].tieReason = `Head-to-Head vs ${defeatedNames.join(', ')}`;
             }
         }
     }
@@ -154,17 +161,13 @@ function toggleJSReady(r, mI, pN) { if(pN===1) state.js.rounds[r][mI].ready1 = !
 function closeJSModal() { document.getElementById('js-match-modal').classList.add('hidden'); }
 
 function setJSWinner(r, m, winnerName) { 
-    const match = state.js.rounds[r][m]; 
-    match.winner = winnerName; 
-    let p1 = state.js.players.find(p => p.name === match.p1); 
-    let p2 = state.js.players.find(p => p.name === match.p2); 
-    p1.played.push(p2.name); 
-    p2.played.push(p1.name); 
+    const match = state.js.rounds[r][m]; match.winner = winnerName; 
+    let p1 = state.js.players.find(p => p.name === match.p1); let p2 = state.js.players.find(p => p.name === match.p2); 
+    p1.played.push(p2.name); p2.played.push(p1.name); 
     let w = state.js.players.find(p => p.name === winnerName); 
     let loserName = match.p1 === winnerName ? match.p2 : match.p1;
     if(!w.defeated) w.defeated = [];
-    w.defeated.push(loserName);
-    w.points += 3; 
+    w.defeated.push(loserName); w.points += 3; 
     saveData(); closeJSModal(); renderJSSwiss(); 
 }
 
@@ -172,17 +175,11 @@ function revertJSSwissWinner() {
     let matches = state.js.rounds[state.js.currentRound]; 
     let lastMatch = [...matches].reverse().find(m => m.winner !== null); 
     if (!lastMatch) return mfModal.show("Hold Up", "No matches to undo.", "warning"); 
-    let w = state.js.players.find(p => p.name === lastMatch.winner); 
-    w.points -= 3; 
+    let w = state.js.players.find(p => p.name === lastMatch.winner); w.points -= 3; 
     let loserName = lastMatch.p1 === lastMatch.winner ? lastMatch.p2 : lastMatch.p1;
-    if(w.defeated) {
-        let idx = w.defeated.indexOf(loserName);
-        if(idx > -1) w.defeated.splice(idx, 1);
-    }
-    let p1 = state.js.players.find(p => p.name === lastMatch.p1); 
-    let p2 = state.js.players.find(p => p.name === lastMatch.p2); 
-    p1.played.pop(); p2.played.pop(); 
-    lastMatch.winner = null; 
+    if(w.defeated) { let idx = w.defeated.indexOf(loserName); if(idx > -1) w.defeated.splice(idx, 1); }
+    let p1 = state.js.players.find(p => p.name === lastMatch.p1); let p2 = state.js.players.find(p => p.name === lastMatch.p2); 
+    p1.played.pop(); p2.played.pop(); lastMatch.winner = null; 
     saveData(); renderJSSwiss(); 
 }
 
@@ -191,17 +188,14 @@ function finishSwiss() {
         if (b.points !== a.points) return b.points - a.points;
         let aDefeatedB = a.defeated && a.defeated.includes(b.name);
         let bDefeatedA = b.defeated && b.defeated.includes(a.name);
-        if (aDefeatedB) return -1;
-        if (bDefeatedA) return 1;
-        return 0;
+        if (aDefeatedB) return -1; if (bDefeatedA) return 1; return 0;
     });
     showJSUltimateWinner(sorted); 
 }
 
 function showJSUltimateWinner(sortedPlayers) {
     playTransition(GIFS.WINNER, 3200, () => {
-        state.matchFinished=true; let w = sortedPlayers[0].name;
-        triggerConfetti(null);
+        state.matchFinished=true; let w = sortedPlayers[0].name; triggerConfetti(null);
         let podiumLog = sortedPlayers.slice(0,3).map(p=>p.name);
         
         if (!state.history) state.history = [];
