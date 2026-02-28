@@ -4,13 +4,11 @@ const defaultState = {
     gameMode: 'commander',
     step: 1,
     players: 2,
-    decks: 3,
+    decks: 3, 
     deckData: [],
     savedDecks: [],
     tempPlayerNames: [],
-    savedPlayers: [
-        { id: "FOX-00001", name: "Daniel", addedAt: Date.now() }
-    ],
+    savedPlayers: [],
     playerLocks: [],
     playerBans: [],
     currentMatch: [],
@@ -36,15 +34,12 @@ export function loadLocalState() {
         if (local) {
             const parsed = JSON.parse(local);
             state = { ...state, ...parsed };
-            
-            // ESCUDO DE MIGRACIÓN: Convierte textos viejos en Objetos con ID
+
+            // ESCUDO DE MIGRACIÓN PARA IDS
             if (Array.isArray(state.savedPlayers)) {
                 state.savedPlayers = state.savedPlayers.map(p => {
                     if (typeof p === 'string') {
                         return { id: `FOX-${Math.random().toString(36).substr(2,5).toUpperCase()}`, name: p, addedAt: Date.now() };
-                    }
-                    if (p && typeof p === 'object' && !p.id) {
-                        p.id = `FOX-${Math.random().toString(36).substr(2,5).toUpperCase()}`;
                     }
                     return p;
                 }).filter(p => p && p.name); 

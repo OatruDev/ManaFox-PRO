@@ -7,12 +7,12 @@ export const GIFS = {
 
 export const baseDecks = [
     { id: "DCK-0000001", name: "Jeskai Striker (Shiko)", colors: ['W', 'R', 'U'] }, 
-    { id: "DCK-0000002", name: "Sultai Arisen (Teval)", colors: ['B', 'G', 'U'] }, 
     { id: "DCK-0000003", name: "Endless Punishment (Valgavoth)", colors: ['B', 'R'] }, 
-    { id: "DCK-0000004", name: "Death Toll (Winter)", colors: ['B', 'G'] }, 
-    { id: "DCK-0000005", name: "Evangelion (Eva01)", colors: ['W', 'U'] }, 
     { id: "DCK-0000006", name: "Eldrazi Incursion (Ulalek)", colors: ['W', 'U', 'B', 'R', 'G'] }, 
-    { id: "DCK-0000007", name: "Dance of the Elements (Ashling)", colors: ['W', 'U', 'B', 'R', 'G'] }
+    { id: "DCK-0000007", name: "Dance of the Elements (Ashling)", colors: ['W', 'U', 'B', 'R', 'G'] }, 
+    { id: "DCK-0000005", name: "Evangelion (Eva01)", colors: ['W', 'U'] }, 
+    { id: "DCK-0000004", name: "Death Toll (Winter)", colors: ['B', 'G'] }, 
+    { id: "DCK-0000002", name: "Sultai Arisen (Teval)", colors: ['B', 'G', 'U'] }
 ];
 
 export const winQuotes = ["Your Spark burns brighter than ever! ✨", "A flawless victory, Planeswalker. 🏆", "The Multiverse bows to your command. 🌌"];
@@ -72,7 +72,7 @@ export function triggerConfetti(c) {
             window.confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
             window.confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
         }, 250);
-    } catch (e) {} 
+    } catch (e) { console.warn("Confetti error", e); } 
 }
 
 export function getPlayerTheme(c) { 

@@ -2,10 +2,10 @@
 import { state, saveData } from '../state.js';
 import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
-import { GIFS, winQuotes, triggerConfetti, generatePlayerID } from '../utils.js';
+import { GIFS, triggerConfetti, generatePlayerID } from '../utils.js';
 
 export function initJumpstart() {
-    if(state.step === 7) { /* Screen is ready in HTML */ }
+    if(state.step === 7) { }
     else if(state.step === 8) renderJSSavedPlayers();
     else if(state.step === 9) renderJSSwiss();
 }
@@ -21,7 +21,7 @@ export function handleJumpstartNext() {
         }
         let nwP=false;
         state.tempPlayerNames.forEach(pN => {
-            let exists = state.savedPlayers.find(p => p && p.name && p.name.toLowerCase() === pN.toLowerCase());
+            let exists = state.savedPlayers.find(p => p.name.toLowerCase() === pN.toLowerCase());
             if(!exists) {
                 state.savedPlayers.push({ id: generatePlayerID(), name: pN, addedAt: Date.now() }); 
                 nwP=true;
@@ -62,9 +62,8 @@ function renderJSSavedPlayers() {
     const c = document.getElementById('js-saved-players-container');
     if(!c) return;
     c.innerHTML = state.savedPlayers.map((p,i)=> {
-        let pName = typeof p === 'string' ? p : (p.name || 'Unknown');
-        let initial = pName.length > 0 ? pName[0].toUpperCase() : '?';
-        return `<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAddJS('${esc(pName)}')" class="setup-input size-12 rounded-full border border-app-js/40 bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-js/20">${esc(initial)}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(pName)}</span></div>`;
+        let pName = p.name;
+        return `<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAddJS('${esc(pName)}')" class="setup-input size-12 rounded-full border border-app-js/40 bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-js/20">${esc(pName[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(pName)}</span></div>`;
     }).join('');
 }
 
@@ -106,9 +105,7 @@ function assignTieBreakers(sortedPlayers) {
         let tiedWith = sortedPlayers.filter((p, idx) => idx !== i && p.points === sortedPlayers[i].points);
         if (tiedWith.length > 0) {
             let defeatedNames = tiedWith.filter(t => sortedPlayers[i].defeated && sortedPlayers[i].defeated.includes(t.name)).map(t => t.name);
-            if (defeatedNames.length > 0) {
-                sortedPlayers[i].tieReason = `Head-to-Head vs ${defeatedNames.join(', ')}`;
-            }
+            if (defeatedNames.length > 0) { sortedPlayers[i].tieReason = `Head-to-Head win vs ${defeatedNames.join(', ')}`; }
         }
     }
 }
@@ -122,9 +119,7 @@ function renderJSSwiss() {
             if (b.points !== a.points) return b.points - a.points;
             let aDefeatedB = a.defeated && a.defeated.includes(b.name);
             let bDefeatedA = b.defeated && b.defeated.includes(a.name);
-            if (aDefeatedB) return -1;
-            if (bDefeatedA) return 1;
-            return 0;
+            if (aDefeatedB) return -1; if (bDefeatedA) return 1; return 0;
         });
         assignTieBreakers(sorted);
         mCont.innerHTML = sorted.map((p, i) => {
