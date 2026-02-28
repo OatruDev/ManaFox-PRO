@@ -4,6 +4,9 @@ import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
 import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme, getArchetype, generatePlayerID, generateDeckID, formatTime } from '../utils.js';
 
+// ==========================================
+// KERNEL: WAKE LOCK & CLOCK TIMER
+// ==========================================
 let wakeLock = null;
 let matchStartTime = 0;
 let clockInterval = null;
@@ -20,12 +23,10 @@ window.toggleKeepAwake = async function() {
     const btn = document.getElementById('btn-keep-awake');
     if (wakeLock === null) {
         await requestWakeLock();
-        btn.style.borderColor = 'rgba(16,185,129,0.4)'; btn.style.color = '#34d399';
-        btn.querySelector('.lbl').innerHTML = 'Awake<br>ON';
+        if(btn) { btn.style.borderColor = 'rgba(16,185,129,0.4)'; btn.style.color = '#34d399'; btn.querySelector('.lbl').innerHTML = 'Awake<br>ON'; }
     } else {
         releaseWakeLock();
-        btn.style.borderColor = 'rgba(239,68,68,0.4)'; btn.style.color = '#f87171';
-        btn.querySelector('.lbl').innerHTML = 'Awake<br>OFF';
+        if(btn) { btn.style.borderColor = 'rgba(239,68,68,0.4)'; btn.style.color = '#f87171'; btn.querySelector('.lbl').innerHTML = 'Awake<br>OFF'; }
     }
 }
 
@@ -37,6 +38,7 @@ function startClock() {
 window.updateClockUI = function() {
     if(!menuOpen) {
         let diff = Math.floor((Date.now() - matchStartTime) / 1000);
+        if(diff < 0) diff = 0;
         let m = String(Math.floor(diff / 60)).padStart(2, '0');
         let s = String(diff % 60).padStart(2, '0');
         const icon = document.getElementById('center-menu-icon');
@@ -44,6 +46,9 @@ window.updateClockUI = function() {
     }
 }
 
+// ==========================================
+// CORE INIT & PRESETS
+// ==========================================
 export function initCommander() {
     if (state.step === 1) { document.getElementById('count-players').innerText = state.players; document.getElementById('count-decks').innerText = state.decks; } 
     else if (state.step === 2) buildDeckDOM();
@@ -70,6 +75,29 @@ function applyDJLPreset() {
     state.playerLocks = []; state.playerBans = [[], [4], []]; saveData(); goToDecks(); 
 }
 
+// ==========================================
+// DECK ENTRY & LIBRARY LOGIC 
+// ==========================================
+function openLibraryManager() {
+    syncDecksToLibrary();
+    const modal = document.getElementById('library-modal');
+    if (!document.getElementById('library-list')) {
+        modal.innerHTML = `
+        <div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col relative max-h-[80vh]">
+            <button onclick="window.closeLibraryManager()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition z-20"><span class="material-symbols-outlined">close</span></button>
+            <h3 class="font-black text-xl mb-2 text-white tracking-widest uppercase flex items-center gap-2"><span class="material-symbols-outlined text-app-primary">library_books</span> Deck Library</h3>
+            <p class="text-[10px] text-slate-400 mb-4 uppercase tracking-widest">Saved custom decks</p>
+            <div id="library-list" class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-2"></div>
+        </div>`;
+    }
+    const list = document.getElementById('library-list'); list.innerHTML = '';
+    if (state.savedDecks.length === 0) list.innerHTML = '<p class="text-center text-slate-500 italic mt-8 font-medium">No custom decks saved yet.</p>';
+    else state.savedDecks.forEach((d, i) => { const mH = d.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px]"></i>`).join(' '); list.innerHTML += `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between"><div class="flex flex-col overflow-hidden pr-2"><span class="font-bold text-sm text-white truncate">${esc(d.name)}</span><span class="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5">${d.id || 'Custom'}</span><div class="flex gap-1 mt-1 text-slate-400">${mH}</div></div><button onclick="window.deleteSavedDeck(${i})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20"><span class="material-symbols-outlined text-[18px]">delete</span></button></div>`; });
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+}
+function closeLibraryManager() { document.getElementById('library-modal').classList.add('hidden'); document.getElementById('library-modal').classList.remove('flex'); buildDeckDOM(); }
+async function deleteSavedDeck(idx) { const c = await mfModal.show("Delete Deck?", `Permanently delete "${esc(state.savedDecks[idx].name)}"?`, "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); openLibraryManager(); } }
+
 function goToDecks() { 
     if (state.deckData.length < state.decks) {
         let diff = state.decks - state.deckData.length;
@@ -92,11 +120,11 @@ function buildDeckDOM() {
                     <span class="text-[11px] font-black text-white bg-white/10 px-2 py-0.5 rounded-md mt-1 uppercase tracking-wider">${archName}</span>
                 </div>
                 <div class="flex gap-2">
-                    <select onchange="window.loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name || '')}</option>`).join('')}</select>
+                    <select onchange="window.loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name)}</option>`).join('')}</select>
                     <button onclick="window.removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button>
                 </div>
             </div>
-            <input type="text" id="deck-input-${i}" maxlength="40" oninput="window.updateDeckName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white transition-all" value="${esc(d.name || '')}" placeholder="Deck Name (Required)">
+            <input type="text" id="deck-input-${i}" maxlength="40" oninput="window.updateDeckName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white transition-all" value="${esc(d.name)}" placeholder="Deck Name (Required)">
             <div class="flex gap-2">${colorsHTML}</div>
         </div>`; 
     }); 
@@ -126,11 +154,41 @@ function syncDecksToLibrary() {
     if (nw) saveData(); 
 }
 
+// ==========================================
+// PLAYER ROSTER LOGIC
+// ==========================================
 function savePlayerInputs() {
     for (let i = 0; i < state.players; i++) {
         let input = document.getElementById(`p-in-${i}`);
         if (input) state.tempPlayerNames[i] = esc(input.value);
     }
+}
+
+function setPlayerLock(pIdx, dIdx) {
+    savePlayerInputs();
+    if(!state.playerLocks) state.playerLocks = [];
+    state.playerLocks[pIdx] = dIdx;
+    if (dIdx !== -1 && state.playerBans[pIdx] && state.playerBans[pIdx].includes(dIdx)) {
+        state.playerBans[pIdx] = state.playerBans[pIdx].filter(id => id !== dIdx);
+    }
+    saveData(); goToPlayers();
+}
+
+function toggleBan(pIdx, dIdx) {
+    savePlayerInputs();
+    if (!state.playerBans) state.playerBans = [];
+    if (!state.playerBans[pIdx]) state.playerBans[pIdx] = [];
+    if (state.playerLocks[pIdx] !== undefined && state.playerLocks[pIdx] !== -1) return;
+    let validD = state.deckData.filter(d => d.name && d.name.trim() !== "");
+    let maxBans = Math.max(0, validD.length - 2);
+    let idx = state.playerBans[pIdx].indexOf(dIdx);
+    if (idx > -1) {
+        state.playerBans[pIdx].splice(idx, 1);
+    } else {
+        if (state.playerBans[pIdx].length >= maxBans) return mfModal.show("Limit Reached", "You must leave at least 2 decks available in the pool.", "warning");
+        state.playerBans[pIdx].push(dIdx);
+    }
+    saveData(); goToPlayers();
 }
 
 function goToPlayers() { 
@@ -140,6 +198,7 @@ function goToPlayers() {
     let validD = state.deckData.map((d, i) => ({ ...d, origIdx: i })).filter(d => d.name && d.name.trim() !== "");
     let maxBans = Math.max(0, validD.length - 2);
     if (!state.playerBans) state.playerBans = [];
+    if (!state.playerLocks) state.playerLocks = [];
     
     for (let i = 0; i < state.players; i++) { 
         if (!state.playerBans[i]) state.playerBans[i] = [];
@@ -152,18 +211,22 @@ function goToPlayers() {
             let lockedByOther = -1;
             for(let j=0; j<state.players; j++){ if(j !== i && state.playerLocks[j] === d.origIdx) { lockedByOther = j; break; } }
             let isLockedByMe = lockVal === d.origIdx;
-            deckOpts += `<option value="${d.origIdx}" class="${lockedByOther !== -1 ? 'text-slate-600' : 'text-slate-200'}" ${isLockedByMe ? 'selected' : ''} ${lockedByOther !== -1 ? 'disabled' : ''}>${esc(d.name)} ${lockedByOther !== -1 ? `(P${lockedByOther + 1})` : ''}</option>`;
+            let disabledAttr = lockedByOther !== -1 ? 'disabled' : '';
+            let optClass = lockedByOther !== -1 ? 'text-slate-600' : 'text-slate-200';
+            let lockText = lockedByOther !== -1 ? `(P${lockedByOther + 1})` : '';
+            deckOpts += `<option value="${d.origIdx}" class="${optClass}" ${isLockedByMe ? 'selected' : ''} ${disabledAttr}>${esc(d.name)} ${lockText}</option>`;
         });
         
         let bansHTML = validD.map((d) => {
             const isBanned = state.playerBans[i].includes(d.origIdx);
             const isDisabled = hasLock || (!isBanned && atBanLimit);
-            return `<button onclick="window.toggleBan(${i}, ${d.origIdx})" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none' : ''}">
+            const titleMsg = hasLock ? "Cannot ban when a deck is locked." : (isDisabled ? `Max bans reached` : "Ban this deck");
+            return `<button onclick="window.toggleBan(${i}, ${d.origIdx})" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}">
                 <span class="material-symbols-outlined text-[10px] align-middle mr-1">${isBanned ? 'block' : 'check_box_outline_blank'}</span> ${esc(d.name)}
             </button>`;
         }).join('');
 
-        c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button onclick="window.removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="window.setPlayerLock(${i}, parseInt(this.value))" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Vetoes</label><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`; 
+        c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button onclick="window.removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="window.setPlayerLock(${i}, parseInt(this.value))" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><label class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex justify-between items-center"><span>Vetoes (Bans)</span><span class="text-slate-600 font-normal normal-case text-[8px] flex items-center gap-1">Swipe <span class="material-symbols-outlined text-[10px]">arrow_forward</span></span></label><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`; 
     } 
     switchScreen(3); 
 }
@@ -174,12 +237,16 @@ function renderSavedPlayers() {
     c.innerHTML = state.savedPlayers.map((p, i) => {
         let pName = typeof p === 'string' ? p : (p.name || 'Unknown');
         let initial = pName.length > 0 ? pName[0].toUpperCase() : '?';
-        return `<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 shadow-sm z-10">✕</button><div onclick="window.quickAdd('${esc(pName)}')" class="setup-input size-12 rounded-full border border-app-primary bg-app-surface-light flex items-center justify-center font-bold text-white cursor-pointer">${esc(initial)}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(pName)}</span></div>`;
+        return `<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAdd('${esc(pName)}')" class="setup-input size-12 rounded-full border border-app-primary bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-primary/20 transition-colors">${esc(initial)}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(pName)}</span></div>`;
     }).join(''); 
 }
 
 function quickAdd(n) { for (let i = 0; i < state.players; i++) { const inp = document.getElementById('p-in-' + i); if (inp && !inp.value) { inp.value = n; state.tempPlayerNames[i] = n; break; } } saveData(); }
-async function deleteSavedPlayer(i) { const c = await mfModal.show("Remove Player?", `Remove from roster?`, "person_remove", "confirm"); if (c) { state.savedPlayers.splice(i, 1); saveData(); renderSavedPlayers(); } }
+async function deleteSavedPlayer(i) { 
+    let pName = typeof state.savedPlayers[i] === 'string' ? state.savedPlayers[i] : state.savedPlayers[i].name;
+    const c = await mfModal.show("Remove Player?", `Are you sure you want to remove "${esc(pName)}" from your Roster?`, "person_remove", "confirm"); 
+    if (c) { state.savedPlayers.splice(i, 1); saveData(); renderSavedPlayers(); if (state.savedPlayers.length === 0) document.getElementById('saved-players-section').classList.add('hidden'); } 
+}
 function removePlayer(i) { if (state.players <= 1) return; state.tempPlayerNames.splice(i, 1); state.playerLocks.splice(i, 1); state.playerBans.splice(i, 1); state.players--; goToPlayers(); saveData(); }
 function addExtraPlayer() { state.players++; goToPlayers(); saveData(); }
 
@@ -213,6 +280,7 @@ function executeAssignment() {
         else tempMatch[pObj.idx] = { deck: null };
     }
     
+    // FIX: Relational Objects (Usando playerName consistentemente)
     for (let i = 0; i < state.players; i++) { 
         let pN = state.tempPlayerNames[i] || `Player ${i+1}`; 
         let pObj = state.savedPlayers.find(p => p.name && p.name.toLowerCase() === pN.toLowerCase());
@@ -221,7 +289,7 @@ function executeAssignment() {
         let mDeck = tempMatch[i] ? tempMatch[i].deck : null;
         state.currentMatch.push({ 
             playerId: pID, 
-            playerName: pN, 
+            playerName: pN, // Esto es lo que rompió el motor antes
             deck: mDeck, 
             life: 40, cmdrDmg: {}, isDead: false, deathCause: "None", themeVars: getPlayerTheme(mDeck ? mDeck.colors : []) 
         }); 
@@ -229,11 +297,13 @@ function executeAssignment() {
     state.remainingDecks = [...pool]; state.undoStack = []; saveData(); buildResultsDOM(); switchScreen(4); 
 }
 
+function reassignDecks() { executeAssignment(); }
+
 function buildResultsDOM() { 
     const c = document.getElementById('assignments-container'); c.innerHTML = ''; 
     state.currentMatch.forEach(m => { 
         const mH = m.deck ? m.deck.colors.map(col => `<div class="size-5 rounded-full flex items-center justify-center mana-btn ${state.manaColors.find(x => x.id === col).cls} active border border-black/30 shadow-sm">${state.manaColors.find(x => x.id === col).icon}</div>`).join('') : ''; 
-        c.innerHTML += `<div class="bg-app-surface/90 backdrop-blur-sm p-4 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg"><div class="flex items-center gap-4"><div class="size-12 rounded-full bg-app-surface-light border border-white/10 flex items-center justify-center font-bold text-lg text-white">${esc(m.playerName[0].toUpperCase())}</div><div><h3 class="font-bold text-[15px] text-white">${esc(m.playerName)}</h3><p class="text-app-accent font-bold text-[10px] uppercase tracking-widest mt-1">Assigned to</p></div></div><div class="text-right max-w-[45%] flex flex-col items-end"><span class="text-app-primary font-bold text-sm truncate drop-shadow-md">${m.deck ? esc(m.deck.name) : 'Unknown'}</span><div class="flex gap-1 justify-end mt-1.5 min-h-[20px]">${mH}</div></div></div>`; 
+        c.innerHTML += `<div class="bg-app-surface/90 backdrop-blur-sm p-4 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg transition-colors"><div class="flex items-center gap-4"><div class="size-12 rounded-full bg-app-surface-light border border-white/10 flex items-center justify-center font-bold text-lg text-white">${esc(m.playerName[0].toUpperCase())}</div><div><h3 class="font-bold text-[15px] text-white">${esc(m.playerName)}</h3><p class="text-app-accent font-bold text-[10px] uppercase tracking-widest mt-1">Assigned to</p></div></div><div class="text-right max-w-[45%] flex flex-col items-end"><span class="text-app-primary font-bold text-sm truncate drop-shadow-md">${m.deck ? esc(m.deck.name) : 'Unknown'}</span><div class="flex gap-1 justify-end mt-1.5 min-h-[20px]">${mH}</div></div></div>`; 
     }); 
     const remSec = document.getElementById('rem-section'); 
     if (state.remainingDecks.length > 0) { 
@@ -242,9 +312,15 @@ function buildResultsDOM() {
     } else remSec.classList.add('hidden'); 
 }
 
+// ==========================================
+// BATTLEFIELD ENGINE
+// ==========================================
 function initBattlefield() { 
     playTransition(GIFS.BATTLE, 2600, async () => { 
-        renderBattlefield(); startClock(); switchScreen(5); 
+        renderBattlefield(); 
+        switchScreen(5); 
+        startClock();
+        await requestWakeLock(); 
     }); 
 }
 
@@ -283,15 +359,27 @@ function renderBattlefield() {
     grid.className = 'bf-grid'; 
     if (count === 2) grid.classList.add('bf-2p'); else if (count === 3) grid.classList.add('bf-3p'); else if (count === 4) grid.classList.add('bf-4p-grid'); else if (count === 5) grid.classList.add('bf-5p'); else grid.classList.add('bf-6p'); 
     
+    let layoutBtn = document.getElementById('layout-toggle-btn');
+    if (count === 4) {
+        if (layoutBtn) layoutBtn.classList.remove('hidden');
+        if (state.layoutMode === 'cross') grid.classList.replace('bf-4p-grid', 'bf-4p-cross'); 
+    } else {
+        if (layoutBtn) layoutBtn.classList.add('hidden');
+    }
+    
     grid.innerHTML = ''; 
     state.currentMatch.forEach((p, i) => { 
         let rotDeg = 0; let pos = ''; 
         if (count === 4 && state.layoutMode === 'cross') { 
-            if (i === 0) { pos = 'cross-pos-0'; rotDeg = 180 } if (i === 1) { pos = 'cross-pos-1'; rotDeg = 90 } 
-            if (i === 2) { pos = 'cross-pos-2'; rotDeg = -90 } if (i === 3) { pos = 'cross-pos-3'; rotDeg = 0 } 
+            if (i === 0) { pos = 'cross-pos-0'; rotDeg = 180 } 
+            if (i === 1) { pos = 'cross-pos-1'; rotDeg = 90 } 
+            if (i === 2) { pos = 'cross-pos-2'; rotDeg = -90 } 
+            if (i === 3) { pos = 'cross-pos-3'; rotDeg = 0 } 
         } else { 
-            if (count === 2 && i === 0) rotDeg = 180; if (count === 3 && i === 0) { rotDeg = 180; pos = 'bf-3p-top' } 
-            if (count >= 4 && (i === 0 || i === 1)) rotDeg = 180; if (count === 6 && i === 2) rotDeg = 180; 
+            if (count === 2 && i === 0) rotDeg = 180; 
+            if (count === 3 && i === 0) { rotDeg = 180; pos = 'bf-3p-top' } 
+            if (count >= 4 && (i === 0 || i === 1)) rotDeg = 180; 
+            if (count === 6 && i === 2) rotDeg = 180; 
         } 
         
         let flexDir = 'flex-col'; let hitbox1 = '1'; let hitbox2 = '-1'; 
@@ -301,7 +389,9 @@ function renderBattlefield() {
         else if (rotDeg === -90) { flexDir = 'flex-row'; hitbox1 = '1'; hitbox2 = '-1'; }
         
         let innerW = '100%'; let innerH = '100%';
-        if (count === 4 && state.layoutMode === 'cross' && (rotDeg === 90 || rotDeg === -90)) { innerW = '40svh'; innerH = '50vw'; }
+        if (count === 4 && state.layoutMode === 'cross' && (rotDeg === 90 || rotDeg === -90)) {
+            innerW = '40svh'; innerH = '50vw';
+        }
 
         let deadOverlay = p.isDead ? `<div class="absolute inset-0 bg-zinc-950/85 backdrop-grayscale z-30 flex flex-col items-center justify-center pointer-events-auto transition-all duration-500" style="transform: rotate(${rotDeg}deg)"><span class="material-symbols-outlined text-[24vmin] text-[#1e83f5] drop-shadow-[0_0_35px_rgba(30,131,245,0.8)]">skull</span><div class="mt-4 px-6 py-2 bg-[#1e83f5]/20 border border-[#1e83f5] text-white text-xs font-black tracking-widest uppercase rounded-full shadow-[0_0_15px_rgba(30,131,245,0.5)]">Eliminated</div></div>` : ''; 
         let lifeUI = p.isDead ? '' : `<span id="life-display-${i}" class="text-[clamp(4rem,12vh,9rem)] font-black tracking-tighter leading-none text-white">${p.life}</span>`; 
@@ -309,9 +399,14 @@ function renderBattlefield() {
         grid.innerHTML += `
         <div class="relative w-full h-full flex flex-col justify-center items-center ${pos} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}">
             <div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}">
-                <div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox1})" ontouchstart="handleTapStart(event, ${i}, ${hitbox1})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox1 === '1' ? '+' : '-'}</span></div>
-                <div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox2})" ontouchstart="handleTapStart(event, ${i}, ${hitbox2})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox2 === '1' ? '+' : '-'}</span></div>
+                <div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox1})" ontouchstart="handleTapStart(event, ${i}, ${hitbox1})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)">
+                    <span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox1 === '1' ? '+' : '-'}</span>
+                </div>
+                <div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox2})" ontouchstart="handleTapStart(event, ${i}, ${hitbox2})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)">
+                    <span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox2 === '1' ? '+' : '-'}</span>
+                </div>
             </div>
+            
             <div class="absolute inset-0 m-auto z-20 pointer-events-none flex flex-col justify-between transition-opacity ${p.isDead ? 'opacity-20' : ''}" style="width: ${innerW}; height: ${innerH}; transform: rotate(${rotDeg}deg);">
                 <div class="flex-1 flex flex-col justify-center items-center w-full text-center">
                     <h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate w-full px-2">${esc(p.playerName)}</h3>
@@ -337,6 +432,11 @@ function renderCmdrDamageIcons(player) {
         } 
     } 
     return html; 
+}
+
+window.toggleLayout = function() { 
+    state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; 
+    renderBattlefield(); window.toggleCenterMenu(); saveData(); 
 }
 
 let currentCmdrTarget = -1;
@@ -377,9 +477,7 @@ window.toggleCenterMenu = function() {
     if (menu) {
         if(menuOpen) { 
             menu.classList.add('active'); 
-            icon.innerText = 'close'; 
-            icon.classList.add('material-symbols-outlined', 'text-3xl', 'rotate-90');
-            icon.classList.remove('font-black', 'text-xl', 'tracking-tighter');
+            if(icon) { icon.innerText = 'close'; icon.classList.add('material-symbols-outlined', 'text-3xl', 'rotate-90'); icon.classList.remove('font-black', 'text-xl', 'tracking-tighter'); }
             const btns = Array.from(menu.querySelectorAll('.radial-btn:not(.hidden)'));
             const R = 95; const startAngle = -Math.PI / 2; const angleStep = (Math.PI * 2) / btns.length;
             btns.forEach((btn, index) => {
@@ -389,8 +487,7 @@ window.toggleCenterMenu = function() {
             });
         } else { 
             menu.classList.remove('active'); 
-            icon.classList.remove('material-symbols-outlined', 'text-3xl', 'rotate-90');
-            icon.classList.add('font-black', 'text-xl', 'tracking-tighter');
+            if(icon) { icon.classList.remove('material-symbols-outlined', 'text-3xl', 'rotate-90'); icon.classList.add('font-black', 'text-xl', 'tracking-tighter'); }
             window.updateClockUI();
             const btns = Array.from(menu.querySelectorAll('.radial-btn'));
             btns.forEach(btn => { btn.style.transform = `translate(0px, 0px) scale(0.3)`; btn.style.opacity = '0'; btn.style.pointerEvents = 'none'; btn.style.transitionDelay = '0s'; });
@@ -399,21 +496,24 @@ window.toggleCenterMenu = function() {
 }
 
 window.resetLife = async function() { window.toggleCenterMenu(); const confirmReset = await mfModal.show("Reset Match", "All players will go back to 40 life.", "refresh", "confirm"); if (confirmReset) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; m.deathCause = "None"; }); state.undoStack = []; matchStartTime = Date.now(); saveData(); renderBattlefield(); } }
-
+window.toggleFullScreen = function() { window.toggleCenterMenu(); if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { console.warn("Fullscreen error"); }); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
 window.rollD20All = function() { window.toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${esc(p.playerName)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let final = {}; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if (r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); state.currentMatch.forEach((p, i) => { if (!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
 
 window.endMatchManual = function() { window.toggleCenterMenu(); window.goToScreen6Manual(); }
 window.goToScreen6Manual = function() { state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.playerName[0])}</div><h3 class="font-black text-lg truncate w-full">${esc(m.playerName)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
 
+// ==========================================
+// DB COMMIT: HISTORY RELACIONAL 
+// ==========================================
 window.showUltimateWinner = function(idx) { 
     clearInterval(clockInterval); releaseWakeLock();
     playTransition(GIFS.WINNER, 3200, () => { 
         state.matchFinished = true; const w = state.currentMatch[idx]; 
-        const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
         triggerConfetti(w.deck ? w.deck.colors : []);
         
         let durationSecs = Math.floor((Date.now() - matchStartTime) / 1000);
         
+        // FIX: El Objeto Relacional perfecto
         let participantsData = state.currentMatch.map(p => ({
             playerId: p.playerId,
             snapshotName: p.playerName,
@@ -479,11 +579,15 @@ function renderHistory() {
 }
 window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete Match?", "Remove this log?", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
 
+// ==========================================
+// EXPORTS & BINDINGS
+// ==========================================
 window.updateCount = updateCount;
 window.applyDandLPreset = applyDandLPreset;
 window.applyDJLPreset = applyDJLPreset;
-window.openLibraryManager = openLibraryManager;
+window.openLibraryManager = openLibraryManager; 
 window.closeLibraryManager = closeLibraryManager;
+window.deleteLibraryDeck = deleteLibraryDeck; 
 window.addExtraDeck = addExtraDeck;
 window.loadDeck = loadDeck;
 window.toggleColor = toggleColor;
@@ -504,7 +608,6 @@ export function handleCommanderNext() {
         syncDecksToLibrary(); 
         let hasErrors = false;
         state.deckData.forEach((d, i) => { 
-            // FIX: Protegemos contra nulos en caso de recarga a la fuerza
             if (!d.name || d.name.trim() === "") { 
                 hasErrors = true; 
                 const el = document.getElementById(`deck-wrapper-${i}`); 
@@ -520,8 +623,11 @@ export function handleCommanderNext() {
         
         savePlayerInputs(); let nwP = false; 
         for (let i = 0; i < state.players; i++) { 
-            let v = state.tempPlayerNames[i] || 'Player ' + (i + 1); state.tempPlayerNames[i] = v; 
-            let existing = state.savedPlayers.find(p => p.name && p.name.toLowerCase() === v.toLowerCase());
+            let v = state.tempPlayerNames[i];
+            if (!v) { v = 'Player ' + (i + 1); state.tempPlayerNames[i] = v; }
+            
+            // FIX CRÍTICO: Comprobación segura evitando que `p.toLowerCase` crashee el navegador
+            let existing = state.savedPlayers.find(p => p && p.name && p.name.toLowerCase() === v.toLowerCase());
             if (!existing) { state.savedPlayers.push({ id: generatePlayerID(), name: v, addedAt: Date.now() }); nwP = true; } 
         } 
         if (nwP) saveData(); executeAssignment(); 
