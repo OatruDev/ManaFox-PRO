@@ -1,4 +1,10 @@
-body { background-color: #000000; color: #f4f4f5; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; user-select: none; -webkit-user-select: none; }
+body { 
+    background-color: #000000; color: #f4f4f5; font-family: 'Inter', sans-serif; 
+    -webkit-tap-highlight-color: transparent; overflow-x: hidden; 
+    user-select: none; -webkit-user-select: none; 
+    /* FIX iOS: Respeta la barra inferior flotante de los iPhone */
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
 input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 
 .material-symbols-outlined { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
@@ -35,6 +41,7 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 @keyframes fluidChaos { 0% { background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%; } 33% { background-position: 100% 100%, 0% 0%, 0% 100%, 100% 0%; } 66% { background-position: 0% 100%, 100% 100%, 100% 0%, 0% 0%; } 100% { background-position: 100% 0%, 0% 100%, 0% 0%, 100% 100%; } }
 .bg-texture::after { content: ""; position: absolute; inset: 0; opacity: 0.2; mix-blend-mode: overlay; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"); z-index: 1; }
 #main-header { border-bottom: 1px solid rgba(255,255,255,0.05); }
+#main-action-bar { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
 
 /* --- LOTUS STYLE RADIAL MENU --- */
 .radial-overlay {
@@ -44,16 +51,16 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 .radial-overlay.active { opacity: 1; pointer-events: auto; }
 
 .radial-btn {
-    position: absolute; top: 50%; left: 50%; width: 72px; height: 72px;
-    margin: -36px 0 0 -36px; border-radius: 50%; 
+    position: absolute; top: 50%; left: 50%; width: 75px; height: 75px;
+    margin: -37.5px 0 0 -37.5px; border-radius: 50%; 
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     background: #09090b; border: 2px solid; color: white;
     box-shadow: 0 10px 25px rgba(0,0,0,0.9), inset 0 0 15px rgba(255,255,255,0.05);
     opacity: 0; pointer-events: none; transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
     transform: translate(0, 0) scale(0.3); z-index: 75; cursor: pointer;
 }
-.radial-btn span.material-symbols-outlined { font-size: 26px; margin-bottom: 2px; }
-.radial-btn span.lbl { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; }
+.radial-btn span.material-symbols-outlined { font-size: 24px; margin-bottom: 2px; }
+.radial-btn span.lbl { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; line-height: 1; }
 
 /* --- UX ANIMATIONS --- */
 @keyframes shake {
@@ -65,20 +72,6 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
     animation: shake 0.4s ease-in-out;
     box-shadow: inset 0 0 0 2px #ef4444 !important;
 }
-
-/* --- MARKET SCANNER UX --- */
-@keyframes laserScan {
-    0% { top: 5%; opacity: 0; }
-    10% { opacity: 1; }
-    90% { opacity: 1; }
-    100% { top: 95%; opacity: 0; }
-}
-.laser-scanner {
-    animation: laserScan 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-.text-app-market { color: #10b981 !important; }
-.bg-app-market { background-color: #10b981 !important; }
-.border-app-market { border-color: #10b981 !important; }
 
 /* --- MARKET SCANNER UX --- */
 @keyframes laserScan {

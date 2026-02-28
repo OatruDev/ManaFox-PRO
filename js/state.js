@@ -4,11 +4,14 @@ const defaultState = {
     gameMode: 'commander',
     step: 1,
     players: 2,
-    decks: 3, // FIX: Default a 3 mazos
+    decks: 3,
     deckData: [],
     savedDecks: [],
     tempPlayerNames: [],
-    savedPlayers: [],
+    // NUEVO: Array relacional. FOX-00001 reservado para ti.
+    savedPlayers: [
+        { id: "FOX-00001", name: "Daniel", addedAt: Date.now() }
+    ],
     playerLocks: [],
     playerBans: [],
     currentMatch: [],
@@ -34,6 +37,10 @@ export function loadLocalState() {
         if (local) {
             const parsed = JSON.parse(local);
             state = { ...state, ...parsed };
+            // Migración para usuarios antiguos (si los hay)
+            if(state.savedPlayers.length > 0 && typeof state.savedPlayers[0] === 'string') {
+                state.savedPlayers = state.savedPlayers.map(name => ({ id: `FOX-${Math.random().toString(36).substr(2,5).toUpperCase()}`, name: name, addedAt: Date.now() }));
+            }
         }
     } catch (e) { console.warn("Error loading state", e); }
 }
