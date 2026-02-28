@@ -5,7 +5,6 @@ export const GIFS = {
     WINNER: 'https://media0.giphy.com/media/l41lZD0i4UU9PkDJe/giphy.gif'
 };
 
-// FIX: IDs reservados y typo de Ashling corregido
 export const baseDecks = [
     { id: "DCK-0000001", name: "Jeskai Striker (Shiko)", colors: ['W', 'R', 'U'] }, 
     { id: "DCK-0000002", name: "Sultai Arisen (Teval)", colors: ['B', 'G', 'U'] }, 
@@ -38,7 +37,6 @@ export function getArchetype(selectedColors) {
     return 'Unknown';
 }
 
-// NUEVO: Generadores de IDs únicos
 export function generatePlayerID() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let res = 'FOX-';

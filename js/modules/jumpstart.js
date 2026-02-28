@@ -21,8 +21,7 @@ export function handleJumpstartNext() {
         }
         let nwP=false;
         state.tempPlayerNames.forEach(pN => {
-            // FIX CRÍTICO: Buscar y guardar Objetos en lugar de Strings viejos
-            let exists = state.savedPlayers.find(p => p.name && p.name.toLowerCase() === pN.toLowerCase());
+            let exists = state.savedPlayers.find(p => p && p.name && p.name.toLowerCase() === pN.toLowerCase());
             if(!exists) {
                 state.savedPlayers.push({ id: generatePlayerID(), name: pN, addedAt: Date.now() }); 
                 nwP=true;
@@ -62,7 +61,6 @@ function goToJSPlayers() {
 function renderJSSavedPlayers() {
     const c = document.getElementById('js-saved-players-container');
     if(!c) return;
-    // FIX: Renderizado antibalas, da igual si p es string viejo u objeto
     c.innerHTML = state.savedPlayers.map((p,i)=> {
         let pName = typeof p === 'string' ? p : (p.name || 'Unknown');
         let initial = pName.length > 0 ? pName[0].toUpperCase() : '?';

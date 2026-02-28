@@ -37,19 +37,17 @@ export function loadLocalState() {
             const parsed = JSON.parse(local);
             state = { ...state, ...parsed };
             
-            // FIX CRÍTICO: Migración a prueba de balas para datos antiguos
+            // ESCUDO DE MIGRACIÓN: Convierte textos viejos en Objetos con ID
             if (Array.isArray(state.savedPlayers)) {
                 state.savedPlayers = state.savedPlayers.map(p => {
-                    // Si es un string viejo, lo convertimos en Objeto ID
                     if (typeof p === 'string') {
                         return { id: `FOX-${Math.random().toString(36).substr(2,5).toUpperCase()}`, name: p, addedAt: Date.now() };
                     }
-                    // Si es un objeto sin ID, se lo asignamos
                     if (p && typeof p === 'object' && !p.id) {
                         p.id = `FOX-${Math.random().toString(36).substr(2,5).toUpperCase()}`;
                     }
                     return p;
-                }).filter(p => p && p.name); // Limpieza de errores nulos
+                }).filter(p => p && p.name); 
             }
         }
     } catch (e) { console.warn("Error loading state", e); }

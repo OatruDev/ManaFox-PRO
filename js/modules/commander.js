@@ -4,12 +4,10 @@ import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
 import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme, getArchetype, generatePlayerID, generateDeckID, formatTime } from '../utils.js';
 
-// ==========================================
-// KERNEL: WAKE LOCK & CLOCK TIMER
-// ==========================================
 let wakeLock = null;
 let matchStartTime = 0;
 let clockInterval = null;
+let menuOpen = false; // Mantenemos el estado global del menú radial
 
 async function requestWakeLock() {
     try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
@@ -35,6 +33,7 @@ function startClock() {
     clearInterval(clockInterval);
     clockInterval = setInterval(updateClockUI, 1000);
 }
+
 window.updateClockUI = function() {
     if(!menuOpen) {
         let diff = Math.floor((Date.now() - matchStartTime) / 1000);
@@ -46,9 +45,6 @@ window.updateClockUI = function() {
     }
 }
 
-// ==========================================
-// CORE INIT & PRESETS
-// ==========================================
 export function initCommander() {
     if (state.step === 1) { document.getElementById('count-players').innerText = state.players; document.getElementById('count-decks').innerText = state.decks; } 
     else if (state.step === 2) buildDeckDOM();
@@ -75,9 +71,6 @@ function applyDJLPreset() {
     state.playerLocks = []; state.playerBans = [[], [4], []]; saveData(); goToDecks(); 
 }
 
-// ==========================================
-// DECK ENTRY & LIBRARY LOGIC 
-// ==========================================
 function openLibraryManager() {
     syncDecksToLibrary();
     const modal = document.getElementById('library-modal');
@@ -120,11 +113,11 @@ function buildDeckDOM() {
                     <span class="text-[11px] font-black text-white bg-white/10 px-2 py-0.5 rounded-md mt-1 uppercase tracking-wider">${archName}</span>
                 </div>
                 <div class="flex gap-2">
-                    <select onchange="window.loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name)}</option>`).join('')}</select>
+                    <select onchange="window.loadDeck(${i},this.value)" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name || '')}</option>`).join('')}</select>
                     <button onclick="window.removeDeck(${i})" class="text-red-400"><span class="material-symbols-outlined text-[14px]">delete</span></button>
                 </div>
             </div>
-            <input type="text" id="deck-input-${i}" maxlength="40" oninput="window.updateDeckName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white transition-all" value="${esc(d.name)}" placeholder="Deck Name (Required)">
+            <input type="text" id="deck-input-${i}" maxlength="40" oninput="window.updateDeckName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white transition-all" value="${esc(d.name || '')}" placeholder="Deck Name (Required)">
             <div class="flex gap-2">${colorsHTML}</div>
         </div>`; 
     }); 
@@ -154,9 +147,6 @@ function syncDecksToLibrary() {
     if (nw) saveData(); 
 }
 
-// ==========================================
-// PLAYER ROSTER LOGIC
-// ==========================================
 function savePlayerInputs() {
     for (let i = 0; i < state.players; i++) {
         let input = document.getElementById(`p-in-${i}`);
@@ -211,17 +201,13 @@ function goToPlayers() {
             let lockedByOther = -1;
             for(let j=0; j<state.players; j++){ if(j !== i && state.playerLocks[j] === d.origIdx) { lockedByOther = j; break; } }
             let isLockedByMe = lockVal === d.origIdx;
-            let disabledAttr = lockedByOther !== -1 ? 'disabled' : '';
-            let optClass = lockedByOther !== -1 ? 'text-slate-600' : 'text-slate-200';
-            let lockText = lockedByOther !== -1 ? `(P${lockedByOther + 1})` : '';
-            deckOpts += `<option value="${d.origIdx}" class="${optClass}" ${isLockedByMe ? 'selected' : ''} ${disabledAttr}>${esc(d.name)} ${lockText}</option>`;
+            deckOpts += `<option value="${d.origIdx}" class="${lockedByOther !== -1 ? 'text-slate-600' : 'text-slate-200'}" ${isLockedByMe ? 'selected' : ''} ${lockedByOther !== -1 ? 'disabled' : ''}>${esc(d.name)} ${lockedByOther !== -1 ? `(P${lockedByOther + 1})` : ''}</option>`;
         });
         
         let bansHTML = validD.map((d) => {
             const isBanned = state.playerBans[i].includes(d.origIdx);
             const isDisabled = hasLock || (!isBanned && atBanLimit);
-            const titleMsg = hasLock ? "Cannot ban when a deck is locked." : (isDisabled ? `Max bans reached` : "Ban this deck");
-            return `<button onclick="window.toggleBan(${i}, ${d.origIdx})" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}">
+            return `<button onclick="window.toggleBan(${i}, ${d.origIdx})" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}">
                 <span class="material-symbols-outlined text-[10px] align-middle mr-1">${isBanned ? 'block' : 'check_box_outline_blank'}</span> ${esc(d.name)}
             </button>`;
         }).join('');
@@ -280,18 +266,18 @@ function executeAssignment() {
         else tempMatch[pObj.idx] = { deck: null };
     }
     
-    // FIX: Relational Objects (Usando playerName consistentemente)
+    // FORMATO RELACIONAL PRO (playerName y playerId correctos)
     for (let i = 0; i < state.players; i++) { 
         let pN = state.tempPlayerNames[i] || `Player ${i+1}`; 
-        let pObj = state.savedPlayers.find(p => p.name && p.name.toLowerCase() === pN.toLowerCase());
+        let pObj = state.savedPlayers.find(p => p && p.name && p.name.toLowerCase() === pN.toLowerCase());
         let pID = pObj ? pObj.id : generatePlayerID();
 
         let mDeck = tempMatch[i] ? tempMatch[i].deck : null;
         state.currentMatch.push({ 
             playerId: pID, 
-            playerName: pN, // Esto es lo que rompió el motor antes
+            playerName: pN, 
             deck: mDeck, 
-            life: 40, cmdrDmg: {}, isDead: false, deathCause: "None", themeVars: getPlayerTheme(mDeck ? mDeck.colors : []) 
+            life: 40, cmdrDmg: {}, isDead: false, deathCause: "None", themeVars: getPlayerTheme(mDeck ? mDeck.colors : []), deathQuote: "" 
         }); 
     } 
     state.remainingDecks = [...pool]; state.undoStack = []; saveData(); buildResultsDOM(); switchScreen(4); 
@@ -312,9 +298,6 @@ function buildResultsDOM() {
     } else remSec.classList.add('hidden'); 
 }
 
-// ==========================================
-// BATTLEFIELD ENGINE
-// ==========================================
 function initBattlefield() { 
     playTransition(GIFS.BATTLE, 2600, async () => { 
         renderBattlefield(); 
@@ -393,7 +376,7 @@ function renderBattlefield() {
             innerW = '40svh'; innerH = '50vw';
         }
 
-        let deadOverlay = p.isDead ? `<div class="absolute inset-0 bg-zinc-950/85 backdrop-grayscale z-30 flex flex-col items-center justify-center pointer-events-auto transition-all duration-500" style="transform: rotate(${rotDeg}deg)"><span class="material-symbols-outlined text-[24vmin] text-[#1e83f5] drop-shadow-[0_0_35px_rgba(30,131,245,0.8)]">skull</span><div class="mt-4 px-6 py-2 bg-[#1e83f5]/20 border border-[#1e83f5] text-white text-xs font-black tracking-widest uppercase rounded-full shadow-[0_0_15px_rgba(30,131,245,0.5)]">Eliminated</div></div>` : ''; 
+        let deadOverlay = p.isDead ? `<div class="absolute inset-0 bg-zinc-950/85 backdrop-grayscale z-30 flex flex-col items-center justify-center pointer-events-auto transition-all duration-500" style="transform: rotate(${rotDeg}deg)"><span class="material-symbols-outlined text-[24vmin] text-[#1e83f5] drop-shadow-[0_0_35px_rgba(30,131,245,0.8)]">skull</span><div class="mt-4 px-6 py-2 bg-[#1e83f5]/20 border border-[#1e83f5] text-white text-xs font-black tracking-widest uppercase rounded-full shadow-[0_0_15px_rgba(30,131,245,0.5)]">Eliminated</div><p class="text-slate-300 font-medium italic mt-4 text-center px-8 text-sm drop-shadow-md">"${esc(p.deathQuote || '')}"</p></div>` : ''; 
         let lifeUI = p.isDead ? '' : `<span id="life-display-${i}" class="text-[clamp(4rem,12vh,9rem)] font-black tracking-tighter leading-none text-white">${p.life}</span>`; 
         
         grid.innerHTML += `
@@ -456,6 +439,7 @@ async function checkEliminations() {
                 let isEliminated = await mfModal.show("Confirm Elimination", `${esc(p.playerName)} reached ${reason}.`, "skull", "confirm"); 
                 if (isEliminated) { 
                     p.isDead = true; p.deathCause = reason; 
+                    p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)]; 
                     if (currentCmdrTarget === i) window.closeCmdrModal(); 
                 } else { 
                     if (cmdrDeath) { for (let k in p.cmdrDmg) if (p.cmdrDmg[k] >= 21) p.cmdrDmg[k] = 20; } else if (p.life <= 0) { p.life = 1; } 
@@ -469,7 +453,6 @@ async function checkEliminations() {
     isCheckingDeath = false; 
 }
 
-let menuOpen = false;
 window.toggleCenterMenu = function() { 
     menuOpen = !menuOpen;
     const menu = document.getElementById('radial-menu-overlay');
@@ -499,21 +482,18 @@ window.resetLife = async function() { window.toggleCenterMenu(); const confirmRe
 window.toggleFullScreen = function() { window.toggleCenterMenu(); if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { console.warn("Fullscreen error"); }); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
 window.rollD20All = function() { window.toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${esc(p.playerName)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let final = {}; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if (r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); state.currentMatch.forEach((p, i) => { if (!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
 
-window.endMatchManual = function() { window.toggleCenterMenu(); window.goToScreen6Manual(); }
+window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
 window.goToScreen6Manual = function() { state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.playerName[0])}</div><h3 class="font-black text-lg truncate w-full">${esc(m.playerName)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
 
-// ==========================================
-// DB COMMIT: HISTORY RELACIONAL 
-// ==========================================
 window.showUltimateWinner = function(idx) { 
     clearInterval(clockInterval); releaseWakeLock();
     playTransition(GIFS.WINNER, 3200, () => { 
         state.matchFinished = true; const w = state.currentMatch[idx]; 
+        const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
         triggerConfetti(w.deck ? w.deck.colors : []);
         
         let durationSecs = Math.floor((Date.now() - matchStartTime) / 1000);
         
-        // FIX: El Objeto Relacional perfecto
         let participantsData = state.currentMatch.map(p => ({
             playerId: p.playerId,
             snapshotName: p.playerName,
@@ -540,8 +520,9 @@ window.showUltimateWinner = function(idx) {
             <div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-yellow-400 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)]">emoji_events</span></div>
             <h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${esc(w.playerName)}</h2>
             <h3 class="text-xl font-bold text-slate-300 mb-8 bg-white/5 px-4 py-1 rounded-full border border-white/10 uppercase">${w.deck ? esc(w.deck.name) : 'No Deck'}</h3>
-            <div class="flex gap-4 mb-10">
-                <div class="bg-app-surface p-4 rounded-xl border border-white/5 shadow-md flex flex-col">
+            <div class="bg-app-surface p-6 rounded-2xl border border-white/5 shadow-lg mb-6 w-full max-w-sm"><p class="text-slate-200 italic text-lg leading-relaxed">"${quote}"</p></div>
+            <div class="flex gap-4 mb-10 w-full max-w-sm justify-center">
+                <div class="bg-app-surface p-4 rounded-xl border border-white/5 shadow-md flex flex-col w-full">
                     <span class="text-[9px] text-slate-500 uppercase font-black tracking-widest">Match Time</span>
                     <span class="text-xl font-black text-white">${formatTime(durationSecs)}</span>
                 </div>
@@ -579,9 +560,6 @@ function renderHistory() {
 }
 window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete Match?", "Remove this log?", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
 
-// ==========================================
-// EXPORTS & BINDINGS
-// ==========================================
 window.updateCount = updateCount;
 window.applyDandLPreset = applyDandLPreset;
 window.applyDJLPreset = applyDJLPreset;
@@ -624,9 +602,8 @@ export function handleCommanderNext() {
         savePlayerInputs(); let nwP = false; 
         for (let i = 0; i < state.players; i++) { 
             let v = state.tempPlayerNames[i];
-            if (!v) { v = 'Player ' + (i + 1); state.tempPlayerNames[i] = v; }
+            if (!v || v.trim() === "") { v = 'Player ' + (i + 1); state.tempPlayerNames[i] = v; }
             
-            // FIX CRÍTICO: Comprobación segura evitando que `p.toLowerCase` crashee el navegador
             let existing = state.savedPlayers.find(p => p && p.name && p.name.toLowerCase() === v.toLowerCase());
             if (!existing) { state.savedPlayers.push({ id: generatePlayerID(), name: v, addedAt: Date.now() }); nwP = true; } 
         } 
