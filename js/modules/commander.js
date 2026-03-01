@@ -230,7 +230,20 @@ function renderBattlefield() {
 function renderCmdrDamageIcons(player) { let html = ''; for (let attackerIdx in player.cmdrDmg) { let dmg = player.cmdrDmg[attackerIdx]; if (dmg > 0 && state.currentMatch[attackerIdx] && !state.currentMatch[attackerIdx].isDead) { html += `<div class="size-8 rounded-full bg-red-900/90 border border-red-500/50 flex items-center justify-center flex-col"><span class="text-[8px] font-bold text-red-200">${esc(state.currentMatch[attackerIdx].player[0].toUpperCase())}</span><span class="text-[12px] font-black text-white">${dmg}</span></div>`; } } return html; }
 
 window.openCmdrModal = function(idx, rotDeg) { const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button aria-label="Decrease" onclick="window.changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button aria-label="Increase" onclick="window.changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold">+</button></div></div>` : '').join(''); document.getElementById('cmdr-modal-box').style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
-window.changeCmdrDmg = function(tI, aI, v) { saveUndoState(); let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); renderBattlefield(); }
+
+// 🐛 BUG 1 CORREGIDO: Ahora el cambio de daño de comandante gatilla la comprobación de eliminación
+window.changeCmdrDmg = function(tI, aI, v) { 
+    saveUndoState(); 
+    let t = state.currentMatch[tI]; 
+    let oldVal = t.cmdrDmg[aI] || 0; 
+    let newVal = Math.max(0, oldVal + v); 
+    t.cmdrDmg[aI] = newVal; 
+    t.life -= (newVal - oldVal); 
+    saveData(); 
+    renderBattlefield(); 
+    setTimeout(() => checkEliminations(), 50); // Gatillo de muerte por comandante añadido
+}
+
 window.closeCmdrModal = function() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
 async function checkEliminations() { 
@@ -248,10 +261,14 @@ async function checkEliminations() {
     let alive = state.currentMatch.filter(p => !p.isDead); if (alive.length === 1 && state.currentMatch.length > 1) window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead));
 }
 
+// 🐛 BUG 3 CORREGIDO: Botón AWAKE ahora cambia de color (rojo/verde) y dice simplemente "Awake"
 window.buildRadialMenu = function() {
     let radial = document.getElementById('radial-menu-overlay'); if (!radial) return;
     radial.querySelectorAll('.radial-btn').forEach(b => b.remove());
-    let wlText = wakeLock !== null ? 'AWAKE ON' : 'AWAKE OFF';
+    
+    let wlColor = wakeLock !== null ? '#22c55e' : '#f87171';
+    let wlBorder = wakeLock !== null ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
+    
     let btnsHtml = `
         <button aria-label="Undo" onclick="window.undoLastAction()" class="radial-btn" style="border-color: rgba(16,185,129,0.4); color: #34d399;">
             <span class="material-symbols-outlined">undo</span><span class="lbl">Undo</span>
@@ -259,8 +276,8 @@ window.buildRadialMenu = function() {
         <button aria-label="Roll D20" onclick="window.rollD20All()" class="radial-btn" style="border-color: rgba(59,130,246,0.4); color: #60a5fa;">
             <span class="material-symbols-outlined">casino</span><span class="lbl">D20</span>
         </button>
-        <button id="btn-keep-awake" aria-label="Toggle Awake" onclick="window.handleWakeLockToggle()" class="radial-btn" style="border-color: rgba(239,68,68,0.4); color: #f87171;">
-            <span class="material-symbols-outlined">lightbulb</span><span class="lbl">${wlText}</span>
+        <button id="btn-keep-awake" aria-label="Toggle Awake" onclick="window.handleWakeLockToggle()" class="radial-btn" style="border-color: ${wlBorder}; color: ${wlColor};">
+            <span class="material-symbols-outlined">lightbulb</span><span class="lbl">Awake</span>
         </button>
         <button aria-label="Reset Match" onclick="window.resetLife()" class="radial-btn" style="border-color: rgba(234,179,8,0.4); color: #facc15;">
             <span class="material-symbols-outlined">refresh</span><span class="lbl">Reset</span>
@@ -290,7 +307,7 @@ window.toggleCenterMenu = function() {
 }
 
 window.handleWakeLockToggle = async function() { const isActive = await toggleWakeLock(); mfModal.show(isActive ? "Awake ON" : "Awake OFF", "", "flare"); window.toggleCenterMenu(); }
-window.toggleKeepAwake = window.handleWakeLockToggle; // Alias para el HTML
+window.toggleKeepAwake = window.handleWakeLockToggle; 
 window.resetLife = async function() { window.toggleCenterMenu(); const c = await mfModal.show("Reset Match?", "Life back to 40.", "refresh", "confirm"); if (c) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); state.undoStack = []; state.matchDurationSeconds = 0; saveData(); renderBattlefield(); } }
 window.rollD20All = function() { window.toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
 window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
@@ -336,11 +353,34 @@ window.startOver = function() {
     saveData(); switchScreen(1); renderHistory();
 }
 
+// 🐛 BUG 2 & 4 CORREGIDOS: El log ahora extrae la información de los decks directamente desde el snapshot guardado y dibuja los colores.
 function renderHistory() {
     const c = document.getElementById('history-container'); if(!c) return;
     if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); else document.getElementById('history-section').classList.add('hidden');      
-    c.innerHTML = state.history.slice(0, 5).map((m, i) => `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button aria-label="Delete History" onclick="window.deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 transition-all"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex justify-between mb-2 text-slate-500 uppercase font-bold tracking-tighter pr-8"><span>${m.date.split('T')[0]}</span><span class="text-yellow-400">🏆 ${esc(m.winner?.player || m.winner)}</span></div><p class="text-[9px] text-slate-500">⏱️ ${m.duration || '00:00'}</p></div>`).join('');
+    
+    c.innerHTML = state.history.slice(0, 5).map((m, i) => {
+        let wObj = m.players ? m.players.find(p => p.result === 'winner' || p.player_id === m.winner_id) : null;
+        let pName = wObj ? wObj.name : (m.winner?.player || m.winner || 'Unknown');
+        let dName = (wObj && wObj.deck) ? wObj.deck.name : 'Unknown Deck';
+        
+        let colorsHtml = '';
+        if (wObj && wObj.deck && wObj.deck.colors) {
+            colorsHtml = wObj.deck.colors.map(col => {
+                let manaObj = state.manaColors.find(x => x.id === col);
+                return manaObj ? `<div class="size-4 rounded-full flex items-center justify-center mana-btn ${manaObj.cls} active border border-black/30 shadow-sm" style="font-size:8px;">${manaObj.icon}</div>` : '';
+            }).join('');
+        }
+
+        return `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button aria-label="Delete History" onclick="window.deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 transition-all z-10"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex flex-col mb-1 pr-8"><div class="flex justify-between text-slate-500 uppercase font-bold tracking-tighter"><span>${m.date.split('T')[0]}</span><span class="text-yellow-400">🏆 ${esc(pName)}</span></div><div class="flex justify-between items-center mt-2"><span class="text-[10px] text-slate-300 uppercase truncate font-bold w-32">${esc(dName)}</span><div class="flex gap-1">${colorsHtml}</div></div></div><p class="text-[9px] text-slate-500 mt-1">⏱️ ${m.duration || '00:00'}</p></div>`;
+    }).join('');
 }
+
+export function goBackCommander() {
+    if (state.step === 2) { switchScreen(1); renderHistory(); }
+    else if (state.step === 3) switchScreen(2);
+    else if (state.step === 4) switchScreen(3);
+}
+
 window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete?", "", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
 
 export function handleCommanderNext() {
@@ -358,10 +398,4 @@ export function handleCommanderNext() {
         if (nwP) saveData(); executeAssignment();
     }
     else if (state.step === 4) initBattlefield();
-}
-
-export function goBackCommander() {
-    if (state.step === 2) { switchScreen(1); renderHistory(); }
-    else if (state.step === 3) switchScreen(2);
-    else if (state.step === 4) switchScreen(3);
 }
