@@ -21,7 +21,6 @@ document.addEventListener('visibilitychange', async () => {
     if (wakeLock !== null && document.visibilityState === 'visible' && state.step === 5) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }
 });
 
-// --- MOTOR DEL RELOJ DE PARTIDA ---
 function startMatchClock() {
     if (matchInterval) clearInterval(matchInterval);
     state.matchStartTime = Date.now();
@@ -163,6 +162,7 @@ function handleTapStart(e, idx, amt) { if (e && e.cancelable) e.preventDefault()
 function handleTapEnd(e) { if (e && e.cancelable) e.preventDefault(); clearTimeout(holdTimer); clearInterval(holdInterval); setTimeout(() => checkEliminations(), 50); }
 function changeLife(idx, amt) { if (state.currentMatch[idx].isDead) return; state.currentMatch[idx].life += amt; const displayNode = document.getElementById(`life-display-${idx}`); if (displayNode) displayNode.innerText = state.currentMatch[idx].life; saveData(); }
 
+// --- FIX: RENDER BATTLEFIELD Y MAPEO DE CLASES CSS ---
 function renderBattlefield() {
     const grid = document.getElementById('battlefield-grid'); const count = state.currentMatch.length;
     grid.className = 'bf-grid';
@@ -176,9 +176,6 @@ function renderBattlefield() {
     else if (count === 5) grid.classList.add('bf-5p'); 
     else grid.classList.add('bf-6p');  
     
-    let layoutBtn = document.getElementById('layout-toggle-btn');
-    if (count === 4) { if (layoutBtn) layoutBtn.classList.remove('hidden'); } else { if (layoutBtn) layoutBtn.classList.add('hidden'); }
-    
     grid.innerHTML = '';
 
     state.currentMatch.forEach((p, i) => {
@@ -189,7 +186,10 @@ function renderBattlefield() {
             if (i === 0) rotDeg = 180; if (i === 1) rotDeg = 90; if (i === 2) rotDeg = -90; if (i === 3) rotDeg = 0; 
         } else { 
             if (count === 2 && i === 0) rotDeg = 180; 
-            if (count === 3 && i === 0) { rotDeg = 180; posClass = 'bf-3p-top'; } 
+            if (count === 3) {
+                if (i === 0) { rotDeg = 180; posClass = 'bf-3p-top'; } 
+                if (i === 1 || i === 2) rotDeg = 0; 
+            }
             if (count >= 4 && (i === 0 || i === 1)) rotDeg = 180; 
             if (count === 6 && i === 2) rotDeg = 180; 
         }
@@ -221,15 +221,12 @@ function renderBattlefield() {
             </div>${deadOverlay}
         </div>`;
     });
-
-    const radial = document.getElementById('radial-menu-overlay');
-    if(radial && !document.getElementById('wake-lock-btn')) {
-        radial.insertAdjacentHTML('beforeend', `<button onclick="event.stopPropagation(); window.handleWakeLockToggle()" id="wake-lock-btn" class="radial-btn" style="border-color: rgba(239,68,68,0.4); color: #ef4444;"><span class="material-symbols-outlined">flare</span><span class="lbl">Keep On</span></button>`);
-    }
 }
 
 function renderCmdrDamageIcons(player) { let html = ''; for (let attackerIdx in player.cmdrDmg) { let dmg = player.cmdrDmg[attackerIdx]; if (dmg > 0 && state.currentMatch[attackerIdx] && !state.currentMatch[attackerIdx].isDead) { html += `<div class="size-10 rounded-full bg-red-900/90 border border-red-500/50 flex items-center justify-center flex-col shadow-lg"><span class="text-[9px] font-bold text-red-200 leading-none">${esc(state.currentMatch[attackerIdx].player[0].toUpperCase())}</span><span class="text-[14px] font-black text-white leading-none">${dmg}</span></div>`; } } return html; }
+
 window.toggleLayout = function() { state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; renderBattlefield(); window.toggleCenterMenu(); saveData(); }
+
 let currentCmdrTarget = -1;
 window.openCmdrModal = function(idx, rotDeg) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button onclick="window.changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button onclick="window.changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>` : '').join(''); const box = document.getElementById('cmdr-modal-box'); box.style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
 window.changeCmdrDmg = function(tI, aI, v) { saveUndoState(); let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); window.openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 50); }
@@ -268,14 +265,43 @@ async function checkEliminations() {
     isCheckingDeath = false; 
 }
 
+// --- FIX: GENERADOR DINÁMICO DEL MENÚ RADIAL (SIN DUPLICADOS) ---
+window.buildRadialMenu = function() {
+    let radial = document.getElementById('radial-menu-overlay');
+    if (!radial) return;
+    
+    let count = state.currentMatch.length;
+    let wlActive = wakeLock !== null;
+    let wlColor = wlActive ? '#22c55e' : '#ef4444';
+    let wlText = wlActive ? 'AWAKE ON' : 'AWAKE OFF';
+
+    // Purgar botones viejos para evitar duplicados como el "Keep on" antiguo
+    let existingBtns = radial.querySelectorAll('.radial-btn');
+    existingBtns.forEach(b => b.remove());
+
+    let layoutHtml = count === 4 ? `<button onclick="event.stopPropagation(); window.toggleLayout()" class="radial-btn" style="border-color: #a855f7; color: #a855f7;"><span class="material-symbols-outlined">dashboard_customize</span><span class="lbl">Layout</span></button>` : '';
+
+    let btnsHtml = `
+        <button onclick="event.stopPropagation(); window.undoLastAction()" class="radial-btn" style="border-color: #10b981; color: #10b981;"><span class="material-symbols-outlined">undo</span><span class="lbl">Undo</span></button>
+        <button onclick="event.stopPropagation(); window.rollD20All()" class="radial-btn" style="border-color: #3b82f6; color: #3b82f6;"><span class="material-symbols-outlined">casino</span><span class="lbl">D20</span></button>
+        ${layoutHtml}
+        <button onclick="event.stopPropagation(); window.handleWakeLockToggle()" id="wake-lock-btn" class="radial-btn" style="border-color: ${wlColor}; color: ${wlColor};"><span class="material-symbols-outlined">flare</span><span class="lbl" id="wake-lbl">${wlText}</span></button>
+        <button onclick="event.stopPropagation(); window.resetLife()" class="radial-btn" style="border-color: #eab308; color: #eab308;"><span class="material-symbols-outlined">refresh</span><span class="lbl">Reset</span></button>
+        <button onclick="event.stopPropagation(); window.endMatchManual()" class="radial-btn" style="border-color: #f43f5e; color: #f43f5e;"><span class="material-symbols-outlined">flag</span><span class="lbl">End</span></button>
+    `;
+    radial.insertAdjacentHTML('beforeend', btnsHtml);
+}
+
 let menuOpen = false;
 window.toggleCenterMenu = function() {
     menuOpen = !menuOpen;
     const menu = document.getElementById('radial-menu-overlay'); const icon = document.getElementById('center-menu-icon');
     if (menu) {
         if(menuOpen) { 
+            window.buildRadialMenu(); // Construye el menú en el momento de abrir
             menu.classList.add('active'); 
             if(icon) { icon.innerText = 'close'; icon.classList.add('rotate-90'); icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
+            
             const btns = Array.from(menu.querySelectorAll('.radial-btn:not(.hidden)')); const R = 95; const startAngle = -Math.PI / 2; const angleStep = (Math.PI * 2) / btns.length; 
             btns.forEach((btn, index) => { const angle = startAngle + index * angleStep; const x = Math.round(Math.cos(angle) * R); const y = Math.round(Math.sin(angle) * R); btn.style.transform = `translate(${x}px, ${y}px) scale(1)`;       btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.style.transitionDelay = `${index * 0.05}s`; }); 
         } else { 
@@ -289,7 +315,15 @@ window.toggleCenterMenu = function() {
     }
 }
 
-window.handleWakeLockToggle = async function() { const isActive = await toggleWakeLock(); const btn = document.getElementById('wake-lock-btn'); if(btn) { btn.style.backgroundColor = isActive ? 'rgba(239,68,68,0.2)' : 'transparent'; btn.style.borderColor = isActive ? '#ef4444' : 'rgba(239,68,68,0.4)'; } mfModal.show(isActive ? "Wake Lock ON" : "Wake Lock OFF", isActive ? "Screen will stay awake." : "Normal timeout restored.", "flare"); }
+window.handleWakeLockToggle = async function() { 
+    const isActive = await toggleWakeLock(); 
+    const btn = document.getElementById('wake-lock-btn'); 
+    const lbl = document.getElementById('wake-lbl');
+    if(btn) { btn.style.borderColor = isActive ? '#22c55e' : '#ef4444'; btn.style.color = isActive ? '#22c55e' : '#ef4444'; }
+    if(lbl) { lbl.innerText = isActive ? 'AWAKE ON' : 'AWAKE OFF'; }
+    mfModal.show(isActive ? "Wake Lock ON" : "Wake Lock OFF", isActive ? "Screen will stay awake." : "Normal timeout restored.", "flare"); 
+}
+
 window.resetLife = async function() { window.toggleCenterMenu(); const confirmReset = await mfModal.show("Reset Match", "All players will go back to 40 life.", "refresh", "confirm"); if (confirmReset) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; m.deathCause = null; m.killerId = null; m.timeOfDeath = null; }); state.undoStack = []; state.matchDurationSeconds = 0; saveData(); renderBattlefield(); } }
 window.toggleFullScreen = function() { window.toggleCenterMenu(); if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { console.warn("Fullscreen error"); }); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
 window.rollD20All = function() { window.toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let final = {}; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if (r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); state.currentMatch.forEach((p, i) => { if (!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
@@ -341,7 +375,6 @@ export function handleCommanderNext() {
         for (let i = 0; i < state.players; i++) {
             let v = state.tempPlayerNames[i] || 'Player ' + (i + 1); state.tempPlayerNames[i] = v;
             if (v && v !== 'Player ' + (i + 1) && !state.savedPlayers.some(p => p.name.toLowerCase() === v.toLowerCase())) { 
-                // REGLA MAESTRA DANIEL FOX-00001
                 let newId = v.toLowerCase() === 'daniel' ? 'FOX-00001' : generatePlayerID();
                 state.savedPlayers.push({ id: newId, name: v, addedAt: Date.now() }); 
                 nwP = true; 
