@@ -360,3 +360,26 @@ export function handleCommanderNext() {
     }
     else if (state.step === 4) initBattlefield();
 }
+
+// --- GLOBAL BINDINGS PARA HTML (EL PUENTE QUE FALTABA) ---
+window.updateCount = updateCount;
+window.applyDandLPreset = applyDandLPreset;
+window.applyDJLPreset = applyDJLPreset;
+window.loadDeck = loadDeck;
+window.toggleColor = toggleColor;
+window.removeDeck = removeDeck;
+window.addExtraDeck = addExtraDeck;
+window.deleteSavedPlayer = deleteSavedPlayer;
+window.quickAdd = quickAdd;
+window.removePlayer = removePlayer;
+window.addExtraPlayer = addExtraPlayer;
+window.handleTapStart = handleTapStart;
+window.handleTapEnd = handleTapEnd;
+window.setPlayerLock = setPlayerLock;
+window.toggleBan = toggleBan;
+
+// Y la función de borrar mazos que me dejé en el tintero:
+window.deleteSavedDeck = async function(idx) {
+    const c = await mfModal.show("Delete Deck?", "Permanently remove this custom deck?", "delete", "confirm");
+    if (c) { state.savedDecks.splice(idx, 1); saveData(); window.openLibraryManager(); }
+};
