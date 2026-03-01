@@ -20,20 +20,30 @@ document.addEventListener('visibilitychange', async () => {
     if (wakeLock !== null && document.visibilityState === 'visible' && state.step === 5) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }
 });
 
+// --- FIX RELOJ: Renderizado inmediato y fuente Inter con tabular-nums ---
 function startMatchClock() {
     if (matchInterval) clearInterval(matchInterval);
     state.matchStartTime = Date.now();
     state.matchDurationSeconds = 0;
-    matchInterval = setInterval(() => {
+    
+    const tickClock = () => {
         if (state.step === 5 && !state.matchFinished) {
-            state.matchDurationSeconds++;
             const icon = document.getElementById('center-menu-icon');
             if (icon && !menuOpen) {
                 icon.innerText = formatLiveClock(state.matchDurationSeconds);
-                icon.style.fontFamily = 'monospace';
+                icon.style.fontFamily = "'Inter', sans-serif";
+                icon.style.fontVariantNumeric = "tabular-nums"; // Evita que los números tiemblen
                 icon.style.fontSize = '18px';
                 icon.style.fontWeight = '900';
             }
+        }
+    };
+
+    tickClock(); // Pinta el segundo 0 al instante, sin saltos.
+    matchInterval = setInterval(() => {
+        if (state.step === 5 && !state.matchFinished) {
+            state.matchDurationSeconds++;
+            tickClock();
         }
     }, 1000);
 }
@@ -90,9 +100,8 @@ window.openLibraryManager = function() {
     if(!modal) { modal = document.createElement('div'); modal.id = 'library-modal'; document.body.appendChild(modal); }
     modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md';
     
-    // FILTRO MAESTRO: Solo mostramos mazos custom. Excluimos los que estén en baseDecks.
     const customDecks = (state.savedDecks || [])
-        .map((d, index) => ({ d, index })) // Guardamos el índice original para el borrado
+        .map((d, index) => ({ d, index }))
         .filter(item => !baseDecks.some(b => b.id === item.d.id || b.name.toLowerCase() === (item.d.name || '').toLowerCase()));
 
     const libHtml = customDecks.length === 0 
@@ -333,7 +342,14 @@ window.toggleCenterMenu = function() {
         if(menuOpen) { 
             window.buildRadialMenu(); 
             menu.classList.add('active'); 
-            if(icon) { icon.innerText = 'close'; icon.classList.add('rotate-90'); icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
+            if(icon) { 
+                icon.innerText = 'close'; 
+                icon.classList.add('rotate-90'); 
+                icon.style.fontFamily = "'Material Symbols Outlined'"; 
+                icon.style.fontSize = '30px'; 
+                icon.style.fontWeight = 'normal'; 
+                icon.style.fontVariantNumeric = "normal";
+            }
             
             const btns = Array.from(menu.querySelectorAll('.radial-btn:not(.hidden)')); const R = 95; const startAngle = -Math.PI / 2; const angleStep = (Math.PI * 2) / btns.length; 
             btns.forEach((btn, index) => { const angle = startAngle + index * angleStep; const x = Math.round(Math.cos(angle) * R); const y = Math.round(Math.sin(angle) * R); btn.style.transform = `translate(${x}px, ${y}px) scale(1)`;       btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.style.transitionDelay = `${index * 0.05}s`; }); 
@@ -341,7 +357,19 @@ window.toggleCenterMenu = function() {
             menu.classList.remove('active'); 
             if(icon) {
                 icon.classList.remove('rotate-90');
-                if (state.step === 5) { icon.innerText = formatLiveClock(state.matchDurationSeconds); icon.style.fontFamily = 'monospace'; icon.style.fontSize = '18px'; icon.style.fontWeight = '900'; } else { icon.innerText = 'apps'; icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
+                if (state.step === 5) { 
+                    icon.innerText = formatLiveClock(state.matchDurationSeconds); 
+                    icon.style.fontFamily = "'Inter', sans-serif"; 
+                    icon.style.fontVariantNumeric = "tabular-nums";
+                    icon.style.fontSize = '18px'; 
+                    icon.style.fontWeight = '900'; 
+                } else { 
+                    icon.innerText = 'apps'; 
+                    icon.style.fontFamily = "'Material Symbols Outlined'"; 
+                    icon.style.fontVariantNumeric = "normal";
+                    icon.style.fontSize = '30px'; 
+                    icon.style.fontWeight = 'normal'; 
+                }
             }
             const btns = Array.from(menu.querySelectorAll('.radial-btn'));        btns.forEach(btn => { btn.style.transform = `translate(0px, 0px) scale(0.3)`; btn.style.opacity = '0'; btn.style.pointerEvents = 'none'; btn.style.transitionDelay = '0s'; }); 
         }
@@ -382,7 +410,7 @@ window.startOver = function() {
     releaseWakeLock(); clearInterval(matchInterval);
     state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; state.undoStack = []; state.matchDurationSeconds = 0;      
     state.playerBans = []; state.playerLocks = []; state.deckData = []; state.step = state.gameMode === 'commander' ? 1 : 7;
-    const icon = document.getElementById('center-menu-icon'); if(icon) { icon.innerText = 'apps'; icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
+    const icon = document.getElementById('center-menu-icon'); if(icon) { icon.innerText = 'apps'; icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; icon.style.fontVariantNumeric = 'normal'; }
     saveData(); switchScreen(state.step); if(state.gameMode === 'commander') renderHistory();
 }
 
