@@ -31,7 +31,9 @@ function startMatchClock() {
             const icon = document.getElementById('center-menu-icon');
             if (icon && !menuOpen) {
                 icon.innerText = formatLiveClock(state.matchDurationSeconds);
-                icon.style.fontFamily = 'monospace'; icon.style.fontSize = '18px'; icon.style.fontWeight = '900';
+                icon.style.fontFamily = 'monospace';
+                icon.style.fontSize = '18px';
+                icon.style.fontWeight = '900';
             }
         }
     }, 1000);
@@ -41,7 +43,6 @@ export function initCommander() {
     if (state.step === 1) { document.getElementById('count-players').innerText = state.players; document.getElementById('count-decks').innerText = state.decks; } 
     else if (state.step === 2) buildDeckDOM(); else if (state.step === 3) goToPlayers(); else if (state.step === 4) buildResultsDOM(); else if (state.step === 5 && state.currentMatch.length > 0) renderBattlefield(); else if (state.step === 6) window.goToScreen6Manual();
     if (state.step < 5) renderHistory();
-    setTimeout(() => { const manageBtn = document.querySelector('[onclick*="openLibraryManager"], #btn-manage'); if(manageBtn) manageBtn.onclick = window.openLibraryManager; }, 100);
 }
 
 function updateCount(t, v) { state[t] = Math.min(t === 'players' ? 6 : 20, Math.max(2, state[t] + v)); document.getElementById('count-' + t).innerText = state[t]; saveData(); }
@@ -77,15 +78,71 @@ function syncDecksToLibrary() {
     if (nw) saveData();
 }
 
+// --- FIX: MOTOR DEL MODAL MANAGE (BLINDADO Y AUTÓNOMO) ---
 window.openLibraryManager = function() {
-    syncDecksToLibrary(); const modal = document.getElementById('library-modal'); if(!modal) return;
-    if (!document.getElementById('library-list')) { modal.innerHTML = `<div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col relative max-h-[80vh]"><button onclick="window.closeLibraryManager()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition z-20"><span class="material-symbols-outlined">close</span></button><h3 class="font-black text-xl mb-2 text-white tracking-widest uppercase flex items-center gap-2"><span class="material-symbols-outlined text-app-primary">library_books</span> Deck Library</h3><p class="text-[10px] text-slate-400 mb-4 uppercase tracking-widest">Saved custom decks</p><div id="library-list" class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-2"></div></div>`; }
-    const list = document.getElementById('library-list'); list.innerHTML = ''; 
-    if (state.savedDecks.length === 0) list.innerHTML = '<p class="text-center text-slate-500 italic mt-8 font-medium">No custom decks saved yet.</p>';
-    else state.savedDecks.forEach((d, i) => { const mH = d.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px]"></i>`).join(' '); list.innerHTML += `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between"><div class="flex flex-col overflow-hidden pr-2"><span class="font-bold text-sm text-white truncate">${esc(d.name)}</span><div class="flex gap-1 mt-1 text-slate-400">${mH}</div></div><button onclick="window.deleteSavedDeck(${i})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20"><span class="material-symbols-outlined text-[18px]">delete</span></button></div>`; });
-    modal.classList.remove('hidden', 'pointer-events-none', 'opacity-0'); modal.style.display = 'flex';
+    syncDecksToLibrary(); 
+    
+    let modal = document.getElementById('library-modal'); 
+    // Si el HTML no tiene el contenedor, lo fabricamos nosotros a la fuerza
+    if(!modal) {
+        modal = document.createElement('div');
+        modal.id = 'library-modal';
+        modal.className = 'fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden';
+        document.body.appendChild(modal);
+    }
+    
+    // Inyectamos el contenido siempre para resetear su estado
+    modal.innerHTML = `
+        <div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col relative max-h-[80vh]">
+            <button onclick="window.closeLibraryManager()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition z-20">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            <h3 class="font-black text-xl mb-2 text-white tracking-widest uppercase flex items-center gap-2">
+                <span class="material-symbols-outlined text-app-primary">library_books</span> Deck Library
+            </h3>
+            <p class="text-[10px] text-slate-400 mb-4 uppercase tracking-widest">Saved custom decks</p>
+            <div id="library-list" class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-2"></div>
+        </div>
+    `;
+    
+    const list = document.getElementById('library-list'); 
+    if (state.savedDecks.length === 0) {
+        list.innerHTML = '<p class="text-center text-slate-500 italic mt-8 font-medium">No custom decks saved yet.</p>';
+    } else {
+        state.savedDecks.forEach((d, i) => { 
+            const mH = d.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px]"></i>`).join(' '); 
+            list.innerHTML += `
+            <div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between">
+                <div class="flex flex-col overflow-hidden pr-2">
+                    <span class="font-bold text-sm text-white truncate">${esc(d.name)}</span>
+                    <div class="flex gap-1 mt-1 text-slate-400">${mH}</div>
+                </div>
+                <button onclick="window.deleteSavedDeck(${i})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20">
+                    <span class="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+            </div>`; 
+        });
+    }
+    
+    modal.classList.remove('hidden', 'pointer-events-none', 'opacity-0'); 
+    modal.style.display = 'flex';
 }
-window.closeLibraryManager = function() { const m = document.getElementById('library-modal'); m.classList.add('hidden'); m.style.display = 'none'; buildDeckDOM(); }
+
+window.closeLibraryManager = function() { 
+    const m = document.getElementById('library-modal'); 
+    if(m) { m.classList.add('hidden'); m.style.display = 'none'; }
+    buildDeckDOM(); 
+}
+
+// Interceptor global para asegurar que el click en "Manage" funciona sí o sí
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('#btn-manage');
+    if (btn) {
+        e.preventDefault();
+        window.openLibraryManager();
+    }
+});
+
 async function deleteSavedDeck(idx) { const c = await mfModal.show("Delete Deck?", `Permanently delete "${esc(state.savedDecks[idx].name)}"?`, "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); window.openLibraryManager(); } }
 
 function savePlayerInputs() { for (let i = 0; i < state.players; i++) { let input = document.getElementById(`p-in-${i}`); if (input) state.tempPlayerNames[i] = esc(input.value); } }
@@ -162,7 +219,6 @@ function handleTapStart(e, idx, amt) { if (e && e.cancelable) e.preventDefault()
 function handleTapEnd(e) { if (e && e.cancelable) e.preventDefault(); clearTimeout(holdTimer); clearInterval(holdInterval); setTimeout(() => checkEliminations(), 50); }
 function changeLife(idx, amt) { if (state.currentMatch[idx].isDead) return; state.currentMatch[idx].life += amt; const displayNode = document.getElementById(`life-display-${idx}`); if (displayNode) displayNode.innerText = state.currentMatch[idx].life; saveData(); }
 
-// --- FIX LAYOUT TOGGLE ---
 window.toggleLayout = function() { 
     state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; 
     const grid = document.getElementById('battlefield-grid');
@@ -183,7 +239,6 @@ window.toggleLayout = function() {
 function renderBattlefield() {
     const grid = document.getElementById('battlefield-grid'); const count = state.currentMatch.length;
     
-    // Solo forzamos clases si no estamos en el modo cruzado de 4
     if (!(count === 4 && state.layoutMode === 'cross')) {
         grid.className = 'bf-grid';
         if (count === 2) grid.classList.add('bf-2p'); 
@@ -280,7 +335,6 @@ async function checkEliminations() {
     isCheckingDeath = false; 
 }
 
-// --- FIX RADIAL MENU BUILDER ---
 window.buildRadialMenu = function() {
     let radial = document.getElementById('radial-menu-overlay');
     if (!radial) return;
@@ -333,70 +387,3 @@ window.handleWakeLockToggle = async function() {
     const isActive = await toggleWakeLock(); 
     const btn = document.getElementById('wake-lock-btn'); 
     const lbl = document.getElementById('wake-lbl');
-    if(btn) { btn.style.borderColor = isActive ? '#22c55e' : '#ef4444'; btn.style.color = isActive ? '#22c55e' : '#ef4444'; } 
-    if(lbl) { lbl.innerText = isActive ? 'AWAKE ON' : 'AWAKE OFF'; }
-    mfModal.show(isActive ? "Wake Lock ON" : "Wake Lock OFF", isActive ? "Screen will stay awake." : "Normal timeout restored.", "flare"); 
-}
-
-window.resetLife = async function() { window.toggleCenterMenu(); const confirmReset = await mfModal.show("Reset Match", "All players will go back to 40 life.", "refresh", "confirm"); if (confirmReset) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; m.deathCause = null; m.killerId = null; m.timeOfDeath = null; }); state.undoStack = []; state.matchDurationSeconds = 0; saveData(); renderBattlefield(); } }
-window.toggleFullScreen = function() { window.toggleCenterMenu(); if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => { console.warn("Fullscreen error"); }); } else { if (document.exitFullscreen) { document.exitFullscreen(); } } }
-window.rollD20All = function() { window.toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 shadow-md w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let final = {}; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); let max = -1; state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; final[i] = r; if (r > max) max = r; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); state.currentMatch.forEach((p, i) => { if (!p.isDead && final[i] === max) { document.getElementById(`dice-p-${i}`).classList.add('text-green-400', 'scale-125', 'transition-transform'); document.getElementById(`dice-row-${i}`).classList.add('border-green-400', 'bg-green-900/20'); } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
-window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
-window.goToScreen6Manual = function() { clearInterval(matchInterval); state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-bold text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
-
-window.showUltimateWinner = function(idx) {
-    releaseWakeLock(); clearInterval(matchInterval);
-    playTransition(GIFS.WINNER, 3200, () => {
-        state.matchFinished = true; const w = state.currentMatch[idx]; const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
-        triggerConfetti(w.deck ? w.deck.colors : []);
-        
-        let participantsLog = state.currentMatch.map(p => ({ player_id: p.id, deck_id: p.deck ? p.deck.id : null, result: p.id === w.id ? "winner" : "eliminated", cause: p.deathCause, killer: p.killerId, eliminated_at: p.timeOfDeath }));
-        state.history.unshift({ id: 'MTC-' + Math.random().toString(36).substring(2,7).toUpperCase(), date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), mode: 'Commander', duration: formatTimeISO(state.matchDurationSeconds), winner_id: w.id, winner: w.player, pairings: state.currentMatch, participants: participantsLog });
-        saveData(); renderHistory();
-        
-        document.getElementById('screen-6').innerHTML = `<div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full"><div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-yellow-400 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)]">emoji_events</span></div><h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${esc(w.player)}</h2><h3 class="text-xl font-bold text-slate-300 mb-8 bg-white/5 px-4 py-1 rounded-full border border-white/10 uppercase">${w.deck ? esc(w.deck.name) : ''}</h3><div class="bg-app-surface p-6 rounded-2xl border border-white/5 shadow-lg mb-10 w-full max-w-sm"><p class="text-slate-200 italic text-lg leading-relaxed">"${quote}"</p></div><button onclick="window.startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button></div>`;
-        switchScreen(6);
-    });
-}
-
-window.startOver = function() {
-    releaseWakeLock(); clearInterval(matchInterval);
-    state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; state.undoStack = []; state.matchDurationSeconds = 0;      
-    state.playerBans = []; state.playerLocks = []; state.step = state.gameMode === 'commander' ? 1 : 7;
-    const icon = document.getElementById('center-menu-icon'); if(icon) { icon.innerText = 'apps'; icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
-    saveData(); switchScreen(state.step); if(state.gameMode === 'commander') renderHistory();
-}
-
-function renderHistory() {
-    const c = document.getElementById('history-container'); if(!c) return;
-    if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); else document.getElementById('history-section').classList.add('hidden');      
-    c.innerHTML = state.history.slice(0, 5).map((m, i) => `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button onclick="window.deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 opacity-100 transition-all"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex justify-between mb-2 text-slate-500 uppercase font-bold tracking-tighter pr-8"><span>${m.date}</span><span class="text-yellow-400">🏆 ${esc(m.winner)} <span class="text-[8px] text-slate-600 ml-1">(${m.mode || 'Commander'})</span></span></div>${m.duration ? `<p class="text-[9px] text-slate-500 mb-2">⏱️ ${m.duration}</p>` : ''}${(m.mode === 'Jumpstart' && m.podiumLog) ? `<div class="mt-2 text-[9px] text-slate-400 border-t border-white/5 pt-1">Podium: 🥇${esc(m.podiumLog[0])} 🥈${esc(m.podiumLog[1] || '--')} 🥉${esc(m.podiumLog[2] || '--')}</div>` : (m.pairings ? m.pairings.map(p => `<div class="flex justify-between py-0.5"><span class="text-slate-300">${esc(p.player)}</span><span class="text-slate-400 font-medium">${p.deck ? esc(p.deck.name) : ''}</span></div>`).join('') : '')}</div>`).join('');
-}
-window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete Match?", "This action will remove the match from the history.", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
-
-window.updateCount = updateCount; window.applyDandLPreset = applyDandLPreset; window.applyDJLPreset = applyDJLPreset; window.openLibraryManager = openLibraryManager; window.closeLibraryManager = closeLibraryManager; window.addExtraDeck = addExtraDeck; window.loadDeck = loadDeck; window.toggleColor = toggleColor; window.removeDeck = removeDeck; window.addExtraPlayer = addExtraPlayer; window.removePlayer = removePlayer; window.quickAdd = quickAdd; window.deleteSavedPlayer = deleteSavedPlayer; window.setPlayerLock = setPlayerLock; window.toggleBan = toggleBan; window.handleTapStart = handleTapStart; window.handleTapEnd = handleTapEnd;
-
-export function handleCommanderNext() {
-    if (state.step === 1) { state.playerLocks = []; state.playerBans = []; goToDecks(); } 
-    else if (state.step === 2) {
-        syncDecksToLibrary(); let hasErrors = false;
-        state.deckData.forEach((d, i) => { if (d.name.trim() === "") { hasErrors = true; const el = document.getElementById(`deck-wrapper-${i}`); if (el) { el.classList.add('shake-error'); setTimeout(() => el.classList.remove('shake-error'), 400); } } });
-        if (hasErrors) return; goToPlayers();
-    }
-    else if (state.step === 3) {
-        if (state.deckData.filter(d => d.name.trim() !== "").length < state.players) return mfModal.show("Warning", `Need more physical decks!`, "warning");      
-        savePlayerInputs(); let nwP = false;
-        for (let i = 0; i < state.players; i++) {
-            let v = state.tempPlayerNames[i] || 'Player ' + (i + 1); state.tempPlayerNames[i] = v;
-            if (v && v !== 'Player ' + (i + 1) && !state.savedPlayers.some(p => p.name.toLowerCase() === v.toLowerCase())) { 
-                let newId = v.toLowerCase() === 'daniel' ? 'FOX-00001' : generatePlayerID();
-                state.savedPlayers.push({ id: newId, name: v, addedAt: Date.now() }); 
-                nwP = true; 
-            } 
-        }
-        if (nwP) saveData(); executeAssignment();
-    }
-    else if (state.step === 4) initBattlefield();
-}
-
-export function goBackCommander() { if (state.step === 2) switchScreen(1); if (state.step === 3) switchScreen(2); if (state.step === 4) switchScreen(3); if (state.step === 6 && !state.matchFinished) switchScreen(5); }
