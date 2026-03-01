@@ -2,19 +2,14 @@
 import { state, saveData } from '../state.js';
 import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
-import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme, getArchetype, generatePlayerID, generateDeckID, formatTime, formatTimeISO } from '../utils.js';
+import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme, getArchetype, generatePlayerID, generateDeckID, formatLiveClock, formatTimeISO } from '../utils.js';
 
 let wakeLock = null;
 let matchInterval = null;
 
-// --- GESTIÓN DE PANTALLA ENCENDIDA (WAKE LOCK) ---
 async function toggleWakeLock() {
-    if (wakeLock !== null) {
-        await wakeLock.release(); wakeLock = null; return false;
-    } else {
-        try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); return true; } } 
-        catch (err) { console.error("Wake Lock error:", err); } return false;
-    }
+    if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; return false; } 
+    else { try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); return true; } } catch (err) { console.error("Wake Lock error:", err); } return false; }
 }
 
 document.addEventListener('visibilitychange', async () => {
@@ -23,7 +18,7 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
-// --- FIX: RELOJ INTEGRADO EN EL BOTÓN CENTRAL ---
+// FIX BUG 2: Reloj integrado en el botón central con soporte dinámico mm:ss / hh:mm:ss
 function startMatchClock() {
     if (matchInterval) clearInterval(matchInterval);
     state.matchStartTime = Date.now();
@@ -33,11 +28,10 @@ function startMatchClock() {
         if (state.step === 5 && !state.matchFinished) {
             state.matchDurationSeconds++;
             const icon = document.getElementById('center-menu-icon');
-            // Si el menú no está abierto, el botón muestra la hora
             if (icon && !menuOpen) {
-                icon.innerText = formatTimeISO(state.matchDurationSeconds);
+                icon.innerText = formatLiveClock(state.matchDurationSeconds);
                 icon.style.fontFamily = 'monospace';
-                icon.style.fontSize = '16px';
+                icon.style.fontSize = '18px';
                 icon.style.fontWeight = '900';
             }
         }
@@ -55,6 +49,12 @@ export function initCommander() {
     else if (state.step === 6) window.goToScreen6Manual();
 
     if (state.step < 5) renderHistory();
+
+    // Blindaje extra para el botón MANAGE en caso de que el HTML no atrape el evento global
+    setTimeout(() => {
+        const manageBtn = document.querySelector('[onclick*="openLibraryManager"], #btn-manage');
+        if(manageBtn) manageBtn.onclick = window.openLibraryManager;
+    }, 100);
 }
 
 function updateCount(t, v) { state[t] = Math.min(t === 'players' ? 6 : 20, Math.max(2, state[t] + v)); document.getElementById('count-' + t).innerText = state[t]; saveData(); }
@@ -69,7 +69,6 @@ function goToDecks() {
 
 function buildDeckDOM() {
     const c = document.getElementById('deck-inputs-container'); c.innerHTML = '';
-    // FIX: Evitar duplicados. state.savedDecks ya contiene los baseDecks.
     const lib = state.savedDecks;
     
     state.deckData.forEach((d, i) => {
@@ -93,8 +92,7 @@ function syncDecksToLibrary() {
         if (d.name !== "") {
             let isUnique = !allE.some(ex => ex.name.toLowerCase() === d.name.toLowerCase());
             if (isUnique) {
-                let newId = generateDeckID();
-                d.id = newId;
+                let newId = generateDeckID(); d.id = newId;
                 state.savedDecks.push({ id: newId, name: d.name, colors: [...d.colors] });  
                 nw = true;
             }
@@ -103,18 +101,24 @@ function syncDecksToLibrary() {
     if (nw) saveData();
 }
 
-function openLibraryManager() {
-    syncDecksToLibrary(); const modal = document.getElementById('library-modal');
+// FIX BUG 1: Forzamos la visualización segura del modal MANAGE
+window.openLibraryManager = function() {
+    syncDecksToLibrary(); 
+    const modal = document.getElementById('library-modal');
+    if(!modal) return;
+    
     if (!document.getElementById('library-list')) {
         modal.innerHTML = `<div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col relative max-h-[80vh]"><button onclick="window.closeLibraryManager()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition z-20"><span class="material-symbols-outlined">close</span></button><h3 class="font-black text-xl mb-2 text-white tracking-widest uppercase flex items-center gap-2"><span class="material-symbols-outlined text-app-primary">library_books</span> Deck Library</h3><p class="text-[10px] text-slate-400 mb-4 uppercase tracking-widest">Saved custom decks</p><div id="library-list" class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-2"></div></div>`;
     }
     const list = document.getElementById('library-list'); list.innerHTML = ''; 
     if (state.savedDecks.length === 0) list.innerHTML = '<p class="text-center text-slate-500 italic mt-8 font-medium">No custom decks saved yet.</p>';
     else state.savedDecks.forEach((d, i) => { const mH = d.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px]"></i>`).join(' '); list.innerHTML += `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between"><div class="flex flex-col overflow-hidden pr-2"><span class="font-bold text-sm text-white truncate">${esc(d.name)}</span><div class="flex gap-1 mt-1 text-slate-400">${mH}</div></div><button onclick="window.deleteSavedDeck(${i})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20"><span class="material-symbols-outlined text-[18px]">delete</span></button></div>`; });
-    modal.classList.remove('hidden');
+    
+    modal.classList.remove('hidden', 'pointer-events-none', 'opacity-0');
+    modal.style.display = 'flex';
 }
-function closeLibraryManager() { document.getElementById('library-modal').classList.add('hidden'); buildDeckDOM(); }
-async function deleteSavedDeck(idx) { const c = await mfModal.show("Delete Deck?", `Permanently delete "${esc(state.savedDecks[idx].name)}"?`, "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); openLibraryManager(); } }
+window.closeLibraryManager = function() { const m = document.getElementById('library-modal'); m.classList.add('hidden'); m.style.display = 'none'; buildDeckDOM(); }
+async function deleteSavedDeck(idx) { const c = await mfModal.show("Delete Deck?", `Permanently delete "${esc(state.savedDecks[idx].name)}"?`, "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); window.openLibraryManager(); } }
 
 function savePlayerInputs() { for (let i = 0; i < state.players; i++) { let input = document.getElementById(`p-in-${i}`); if (input) state.tempPlayerNames[i] = esc(input.value); } }
 function setPlayerLock(pIdx, dIdx) { savePlayerInputs(); state.playerLocks[pIdx] = dIdx; if (dIdx !== -1 && state.playerBans[pIdx] && state.playerBans[pIdx].includes(dIdx)) { state.playerBans[pIdx] = state.playerBans[pIdx].filter(id => id !== dIdx); } saveData(); goToPlayers(); }
@@ -198,9 +202,7 @@ function executeAssignment() {
     state.remainingDecks = [...pool]; state.undoStack = []; saveData(); buildResultsDOM(); switchScreen(4);
 }
 
-function reassignDecks() { executeAssignment(); }
-window.reassignDecks = reassignDecks; // FIX BUG 3
-
+window.reassignDecks = function() { executeAssignment(); }
 function buildResultsDOM() {
     const c = document.getElementById('assignments-container'); c.innerHTML = '';
     state.currentMatch.forEach(m => {
@@ -229,7 +231,6 @@ function handleTapStart(e, idx, amt) {
 function handleTapEnd(e) { 
     if (e && e.cancelable) e.preventDefault(); 
     clearTimeout(holdTimer); clearInterval(holdInterval); 
-    // FIX BUG 7: Forzamos la comprobación de victoria al levantar el dedo
     setTimeout(() => checkEliminations(), 50);
 }
 function changeLife(idx, amt) { 
@@ -248,8 +249,6 @@ function renderBattlefield() {
     if (count === 4) { if (layoutBtn) layoutBtn.classList.remove('hidden'); if (state.layoutMode === 'cross') grid.classList.replace('bf-4p-grid', 'bf-4p-cross'); } else { if (layoutBtn) layoutBtn.classList.add('hidden'); }
     grid.innerHTML = '';
 
-    // ELIMINADO EL DIV MORADO FLOTANTE DE AQUI
-
     state.currentMatch.forEach((p, i) => {
         let rotDeg = 0; let pos = '';
         if (count === 4 && state.layoutMode === 'cross') { if (i === 0) { pos = 'cross-pos-0'; rotDeg = 180 } if (i === 1) { pos = 'cross-pos-1'; rotDeg = 90 } if (i === 2) { pos = 'cross-pos-2'; rotDeg = -90 } if (i === 3) { pos = 'cross-pos-3'; rotDeg = 0 } } else { if (count === 2 && i === 0) rotDeg = 180; if (count === 3 && i === 0) { rotDeg = 180; pos = 'bf-3p-top' }       if (count >= 4 && (i === 0 || i === 1)) rotDeg = 180; if (count === 6 && i === 2) rotDeg = 180; }
@@ -262,7 +261,6 @@ function renderBattlefield() {
         grid.innerHTML += `<div class="relative w-full h-full flex flex-col justify-center items-center ${pos} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}"><div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}"><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox1})" ontouchstart="handleTapStart(event, ${i}, ${hitbox1})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox1 === '1' ? '+' : '-'}</span></div><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox2})" ontouchstart="handleTapStart(event, ${i}, ${hitbox2})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox2 === '1' ? '+' : '-'}</span></div></div><div class="absolute inset-0 m-auto z-20 pointer-events-none flex flex-col justify-between transition-opacity ${p.isDead ? 'opacity-20' : ''}" style="width: ${innerW}; height: ${innerH}; transform: rotate(${rotDeg}deg);"><div class="flex-1 flex flex-col justify-center items-center w-full text-center"><h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate w-full px-2">${esc(p.player)}</h3>   <p class="text-[12px] sm:text-sm font-bold text-white/90 truncate mb-1 w-full px-2">${p.deck ? esc(p.deck.name) : ''}</p>${lifeUI}</div><div class="w-full px-4 pb-4 flex justify-between items-end ${p.isDead ? 'hidden' : ''}"><div class="flex gap-2 flex-wrap pointer-events-auto">${renderCmdrDamageIcons(p)}</div><button onclick="window.openCmdrModal(${i}, ${rotDeg})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto shadow-lg active:scale-95 transition-transform backdrop-blur-sm shrink-0"><span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span></button></div></div>${deadOverlay}</div>`;
     });
 
-    // FIX: INYECTAR WAKE LOCK DE FORMA SEGURA (Sin borrar Onclicks nativos)
     const radial = document.getElementById('radial-menu-overlay');
     if(radial && !document.getElementById('wake-lock-btn')) {
         radial.insertAdjacentHTML('beforeend', `<button onclick="event.stopPropagation(); window.handleWakeLockToggle()" id="wake-lock-btn" class="radial-btn" style="border-color: rgba(239,68,68,0.4); color: #ef4444;"><span class="material-symbols-outlined">flare</span><span class="lbl">Keep On</span></button>`);
@@ -276,7 +274,7 @@ window.openCmdrModal = function(idx, rotDeg) { currentCmdrTarget = idx; const t 
 window.changeCmdrDmg = function(tI, aI, v) { saveUndoState(); let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); window.openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 50); }
 window.closeCmdrModal = function() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
-// --- FIX BUG 7: LÓGICA DE MUERTE A PRUEBA DE BALAS ---
+// FIX BUG 3: Ejecución inmediata de la victoria tras confirmar la eliminación
 let isCheckingDeath = false;
 async function checkEliminations() { 
     if (isCheckingDeath) return; 
@@ -297,7 +295,7 @@ async function checkEliminations() {
                     p.isDead = true; 
                     p.deathCause = cmdrDeath ? "cmdr_dmg" : "life_loss";
                     p.killerId = (cmdrDeath && state.currentMatch[killerIdx]) ? state.currentMatch[killerIdx].id : null;
-                    p.timeOfDeath = formatTimeISO(state.matchDurationSeconds);
+                    p.timeOfDeath = formatTimeISO(state.matchDurationSeconds || 0);
                     p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)]; 
                     deathOccurred = true;
                     if (currentCmdrTarget === i) window.closeCmdrModal();        
@@ -309,12 +307,13 @@ async function checkEliminations() {
         }  
     } 
 
-    if (deathOccurred) {
-        let alive = state.currentMatch.filter(p => !p.isDead); 
-        if (alive.length === 1 && state.currentMatch.length > 1) { 
-            setTimeout(() => { window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1000); 
-        } 
+    // Al terminar el bucle, si alguien murió, validamos si solo queda uno
+    let alive = state.currentMatch.filter(p => !p.isDead); 
+    if (alive.length === 1 && state.currentMatch.length > 1) { 
+        let winnerIdx = state.currentMatch.findIndex(p => !p.isDead);
+        window.showUltimateWinner(winnerIdx);
     }
+    
     isCheckingDeath = false; 
 }
 
@@ -325,20 +324,23 @@ window.toggleCenterMenu = function() {
     if (menu) {
         if(menuOpen) { 
             menu.classList.add('active'); 
-            icon.innerText = 'close'; icon.classList.add('rotate-90');
-            icon.style.fontFamily = 'Material Symbols Outlined'; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal';
-            
+            if(icon) {
+                icon.innerText = 'close'; icon.classList.add('rotate-90');
+                icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal';
+            }
             const btns = Array.from(menu.querySelectorAll('.radial-btn:not(.hidden)')); const R = 95; const startAngle = -Math.PI / 2; const angleStep = (Math.PI * 2) / btns.length; 
             btns.forEach((btn, index) => { const angle = startAngle + index * angleStep; const x = Math.round(Math.cos(angle) * R); const y = Math.round(Math.sin(angle) * R); btn.style.transform = `translate(${x}px, ${y}px) scale(1)`;       btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.style.transitionDelay = `${index * 0.05}s`; }); 
         } else { 
             menu.classList.remove('active'); 
-            icon.classList.remove('rotate-90');
-            // Restaura el reloj en el botón central si se está jugando
-            if (state.step === 5) {
-                icon.innerText = formatTimeISO(state.matchDurationSeconds);
-                icon.style.fontFamily = 'monospace'; icon.style.fontSize = '16px'; icon.style.fontWeight = '900';
-            } else {
-                icon.innerText = 'apps';
+            if(icon) {
+                icon.classList.remove('rotate-90');
+                if (state.step === 5) {
+                    icon.innerText = formatLiveClock(state.matchDurationSeconds);
+                    icon.style.fontFamily = 'monospace'; icon.style.fontSize = '18px'; icon.style.fontWeight = '900';
+                } else {
+                    icon.innerText = 'apps';
+                    icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal';
+                }
             }
             const btns = Array.from(menu.querySelectorAll('.radial-btn'));        btns.forEach(btn => { btn.style.transform = `translate(0px, 0px) scale(0.3)`; btn.style.opacity = '0'; btn.style.pointerEvents = 'none'; btn.style.transitionDelay = '0s'; }); 
         }
@@ -395,7 +397,7 @@ window.startOver = function() {
     state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; state.undoStack = []; state.matchDurationSeconds = 0;      
     state.playerBans = []; state.playerLocks = [];
     state.step = state.gameMode === 'commander' ? 1 : 7;
-    const icon = document.getElementById('center-menu-icon'); if(icon) { icon.innerText = 'apps'; icon.style.fontFamily = 'Material Symbols Outlined'; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
+    const icon = document.getElementById('center-menu-icon'); if(icon) { icon.innerText = 'apps'; icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
     saveData(); switchScreen(state.step); if(state.gameMode === 'commander') renderHistory();
 }
 

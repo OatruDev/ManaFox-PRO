@@ -5,7 +5,6 @@ export const GIFS = {
     WINNER: 'https://media0.giphy.com/media/l41lZD0i4UU9PkDJe/giphy.gif'
 };
 
-// FIX: IDs reservados y typo de Ashling corregido
 export const baseDecks = [
     { id: "DCK-0000001", name: "Jeskai Striker (Shiko)", colors: ['W', 'R', 'U'] },
     { id: "DCK-0000002", name: "Sultai Arisen (Teval)", colors: ['B', 'G', 'U'] },
@@ -38,7 +37,6 @@ export function getArchetype(selectedColors) {
     return 'Unknown';
 }
 
-// NUEVO: Generadores de IDs únicos
 export function generatePlayerID() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let res = 'FOX-';
@@ -54,9 +52,7 @@ export function generateDeckID() {
 }
 
 export function formatTime(secs) {
-    let h = Math.floor(secs / 3600);
-    let m = Math.floor((secs % 3600) / 60);
-    let s = secs % 60;
+    let h = Math.floor(secs / 3600); let m = Math.floor((secs % 3600) / 60); let s = secs % 60;
     if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
     return `${m}m ${String(s).padStart(2, '0')}s`;
 }
@@ -64,6 +60,20 @@ export function formatTime(secs) {
 export function formatTimeISO(secs) {
     let h = Math.floor(secs / 3600); let m = Math.floor((secs % 3600) / 60); let s = secs % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// NUEVO: Motor de formateo dinámico para el botón central (mm:ss a hh:mm:ss)
+export function formatLiveClock(secs) {
+    let totalM = Math.floor(secs / 60);
+    let h = Math.floor(totalM / 60);
+    let m = totalM % 60;
+    let s = Math.floor(secs % 60);
+
+    if (totalM >= 100) {
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    } else {
+        return `${String(totalM).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
 }
 
 export function preloadGifs() { Object.values(GIFS).forEach(url => { const img = new Image(); img.src = url; }); }
