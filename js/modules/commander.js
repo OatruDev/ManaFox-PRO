@@ -7,7 +7,6 @@ import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme
 let wakeLock = null;
 let matchInterval = null;
 
-// --- GESTIÓN DE PANTALLA ENCENDIDA ---
 async function toggleWakeLock() {
     if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; return false; } 
     else { try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); return true; } } catch (err) { console.error("Wake Lock error:", err); } return false; }
@@ -31,7 +30,9 @@ function startMatchClock() {
             const icon = document.getElementById('center-menu-icon');
             if (icon && !menuOpen) {
                 icon.innerText = formatLiveClock(state.matchDurationSeconds);
-                icon.style.fontFamily = 'monospace'; icon.style.fontSize = '18px'; icon.style.fontWeight = '900';
+                icon.style.fontFamily = 'monospace';
+                icon.style.fontSize = '18px';
+                icon.style.fontWeight = '900';
             }
         }
     }, 1000);
@@ -74,78 +75,43 @@ function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors
 function removeDeck(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
 function addExtraDeck() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
 
-// --- FIX ANTI-CRASH: Null Safety ---
 function syncDecksToLibrary() {
-    let allE = state.savedDecks || []; 
-    let nw = false;
+    let allE = state.savedDecks || []; let nw = false;
     state.deckData.forEach((d, i) => {
-        const inputNode = document.getElementById(`deck-input-${i}`); 
-        if (inputNode && inputNode.value !== undefined) { d.name = inputNode.value.trim(); }
-        
-        if (d.name && d.name !== "") { 
-            // Validación a prueba de balas por si hay mazos corruptos en localStorage sin nombre
-            let isUnique = !allE.some(ex => (ex.name || '').toLowerCase() === d.name.toLowerCase()); 
-            if (isUnique) { 
-                let newId = generateDeckID(); d.id = newId; 
-                state.savedDecks.push({ id: newId, name: d.name, colors: [...d.colors] }); 
-                nw = true; 
-            } 
-        }
+        const inputNode = document.getElementById(`deck-input-${i}`); if (inputNode && inputNode.value !== undefined) { d.name = inputNode.value.trim(); }
+        if (d.name && d.name !== "") { let isUnique = !allE.some(ex => (ex.name || '').toLowerCase() === d.name.toLowerCase()); if (isUnique) { let newId = generateDeckID(); d.id = newId; state.savedDecks.push({ id: newId, name: d.name, colors: [...d.colors] }); nw = true; } }
     });
     if (nw) saveData();
 }
 
-// --- FIX DEFINITIVO DEL MODAL MANAGE ---
 window.openLibraryManager = function() {
-    try { syncDecksToLibrary(); } catch (e) { console.error("Sync Decks Error:", e); }
-    
+    try { syncDecksToLibrary(); } catch (e) { console.error(e); }
     let modal = document.getElementById('library-modal'); 
-    if(!modal) {
-        modal = document.createElement('div');
-        modal.id = 'library-modal';
-        document.body.appendChild(modal);
-    }
-    
-    // Forzamos clases de Z-Index extremo
+    if(!modal) { modal = document.createElement('div'); modal.id = 'library-modal'; document.body.appendChild(modal); }
     modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md';
     
-    const saved = state.savedDecks || [];
-    const libHtml = saved.length === 0 
+    // FILTRO MAESTRO: Solo mostramos mazos custom. Excluimos los que estén en baseDecks.
+    const customDecks = (state.savedDecks || [])
+        .map((d, index) => ({ d, index })) // Guardamos el índice original para el borrado
+        .filter(item => !baseDecks.some(b => b.id === item.d.id || b.name.toLowerCase() === (item.d.name || '').toLowerCase()));
+
+    const libHtml = customDecks.length === 0 
         ? '<p class="text-center text-slate-500 italic mt-8 font-medium">No custom decks saved yet.</p>'
-        : saved.map((d, i) => { 
+        : customDecks.map(item => { 
+            const d = item.d;
             const mH = (d.colors || []).map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px]"></i>`).join(' '); 
-            return `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between"><div class="flex flex-col overflow-hidden pr-2"><span class="font-bold text-sm text-white truncate">${esc(d.name || 'Unknown')}</span><div class="flex gap-1 mt-1 text-slate-400">${mH}</div></div><button onclick="window.deleteSavedDeck(${i})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20"><span class="material-symbols-outlined text-[18px]">delete</span></button></div>`; 
+            return `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between"><div class="flex flex-col overflow-hidden pr-2"><span class="font-bold text-sm text-white truncate">${esc(d.name || 'Unknown')}</span><div class="flex gap-1 mt-1 text-slate-400">${mH}</div></div><button onclick="window.deleteSavedDeck(${item.index})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20"><span class="material-symbols-outlined text-[18px]">delete</span></button></div>`; 
         }).join('');
 
-    modal.innerHTML = `
-        <div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col relative max-h-[80vh]">
-            <button onclick="window.closeLibraryManager()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition z-20">
-                <span class="material-symbols-outlined">close</span>
-            </button>
-            <h3 class="font-black text-xl mb-2 text-white tracking-widest uppercase flex items-center gap-2">
-                <span class="material-symbols-outlined text-app-primary">library_books</span> Deck Library
-            </h3>
-            <p class="text-[10px] text-slate-400 mb-4 uppercase tracking-widest">Saved custom decks</p>
-            <div class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-2">${libHtml}</div>
-        </div>
-    `;
+    modal.innerHTML = `<div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col relative max-h-[80vh]"><button onclick="window.closeLibraryManager()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition z-20"><span class="material-symbols-outlined">close</span></button><h3 class="font-black text-xl mb-2 text-white tracking-widest uppercase flex items-center gap-2"><span class="material-symbols-outlined text-app-primary">library_books</span> Deck Library</h3><p class="text-[10px] text-slate-400 mb-4 uppercase tracking-widest">Saved custom decks</p><div class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-2">${libHtml}</div></div>`;
     modal.style.display = 'flex';
 }
 
-window.closeLibraryManager = function() { 
-    const m = document.getElementById('library-modal'); 
-    if(m) { m.style.display = 'none'; m.classList.add('hidden'); }
-    buildDeckDOM(); 
-}
+window.closeLibraryManager = function() { const m = document.getElementById('library-modal'); if(m) { m.style.display = 'none'; m.classList.add('hidden'); } buildDeckDOM(); }
 
-// INTERCEPTOR ABSOLUTO: Si pulsas cualquier botón que diga "Manage", fuerza la apertura.
 document.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
-    if (btn && (btn.textContent.trim().toLowerCase() === 'manage' || btn.id === 'btn-manage')) {
-        e.preventDefault();
-        e.stopPropagation();
-        window.openLibraryManager();
-    }
+    if (btn && (btn.textContent.trim().toLowerCase() === 'manage' || btn.id === 'btn-manage')) { e.preventDefault(); e.stopPropagation(); window.openLibraryManager(); }
 });
 
 async function deleteSavedDeck(idx) { const c = await mfModal.show("Delete Deck?", `Permanently delete "${esc(state.savedDecks[idx].name)}"?`, "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); window.openLibraryManager(); } }
@@ -236,9 +202,7 @@ window.toggleLayout = function() {
             grid.classList.add('bf-grid', 'bf-4p-grid');
         }
     }
-    renderBattlefield(); 
-    window.toggleCenterMenu(); 
-    saveData(); 
+    renderBattlefield(); window.toggleCenterMenu(); saveData(); 
 }
 
 function renderBattlefield() {
@@ -252,7 +216,6 @@ function renderBattlefield() {
         else if (count === 5) grid.classList.add('bf-5p'); 
         else grid.classList.add('bf-6p');  
     }
-    
     grid.innerHTML = '';
 
     state.currentMatch.forEach((p, i) => {
@@ -263,10 +226,7 @@ function renderBattlefield() {
             if (i === 0) rotDeg = 180; if (i === 1) rotDeg = 90; if (i === 2) rotDeg = -90; if (i === 3) rotDeg = 0; 
         } else { 
             if (count === 2 && i === 0) rotDeg = 180; 
-            if (count === 3) {
-                if (i === 0) { rotDeg = 180; posClass = 'bf-3p-top'; } 
-                if (i === 1 || i === 2) rotDeg = 0; 
-            }
+            if (count === 3) { if (i === 0) { rotDeg = 180; posClass = 'bf-3p-top'; } if (i === 1 || i === 2) rotDeg = 0; }
             if (count >= 4 && (i === 0 || i === 1)) rotDeg = 180; 
             if (count === 6 && i === 2) rotDeg = 180; 
         }
@@ -421,7 +381,7 @@ window.showUltimateWinner = function(idx) {
 window.startOver = function() {
     releaseWakeLock(); clearInterval(matchInterval);
     state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; state.undoStack = []; state.matchDurationSeconds = 0;      
-    state.playerBans = []; state.playerLocks = []; state.step = state.gameMode === 'commander' ? 1 : 7;
+    state.playerBans = []; state.playerLocks = []; state.deckData = []; state.step = state.gameMode === 'commander' ? 1 : 7;
     const icon = document.getElementById('center-menu-icon'); if(icon) { icon.innerText = 'apps'; icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
     saveData(); switchScreen(state.step); if(state.gameMode === 'commander') renderHistory();
 }
@@ -433,10 +393,15 @@ function renderHistory() {
 }
 window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete Match?", "This action will remove the match from the history.", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
 
-window.updateCount = updateCount; window.applyDandLPreset = applyDandLPreset; window.applyDJLPreset = applyDJLPreset; window.addExtraDeck = addExtraDeck; window.loadDeck = loadDeck; window.toggleColor = toggleColor; window.removeDeck = removeDeck; window.addExtraPlayer = addExtraPlayer; window.removePlayer = removePlayer; window.quickAdd = quickAdd; window.deleteSavedPlayer = deleteSavedPlayer; window.setPlayerLock = setPlayerLock; window.toggleBan = toggleBan; window.handleTapStart = handleTapStart; window.handleTapEnd = handleTapEnd;
+window.updateCount = updateCount; window.applyDandLPreset = applyDandLPreset; window.applyDJLPreset = applyDJLPreset; window.openLibraryManager = openLibraryManager; window.closeLibraryManager = closeLibraryManager; window.addExtraDeck = addExtraDeck; window.loadDeck = loadDeck; window.toggleColor = toggleColor; window.removeDeck = removeDeck; window.addExtraPlayer = addExtraPlayer; window.removePlayer = removePlayer; window.quickAdd = quickAdd; window.deleteSavedPlayer = deleteSavedPlayer; window.setPlayerLock = setPlayerLock; window.toggleBan = toggleBan; window.handleTapStart = handleTapStart; window.handleTapEnd = handleTapEnd;
 
 export function handleCommanderNext() {
-    if (state.step === 1) { state.playerLocks = []; state.playerBans = []; goToDecks(); } 
+    if (state.step === 1) { 
+        state.playerLocks = []; state.playerBans = []; 
+        let isPureBase = state.deckData.length > 0 && state.deckData.every((d, i) => baseDecks[i] && d.name === baseDecks[i].name);
+        if (isPureBase) state.deckData = [];
+        goToDecks(); 
+    } 
     else if (state.step === 2) {
         syncDecksToLibrary(); let hasErrors = false;
         state.deckData.forEach((d, i) => { if (d.name.trim() === "") { hasErrors = true; const el = document.getElementById(`deck-wrapper-${i}`); if (el) { el.classList.add('shake-error'); setTimeout(() => el.classList.remove('shake-error'), 400); } } });
