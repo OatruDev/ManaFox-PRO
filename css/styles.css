@@ -3,7 +3,6 @@ body {
     background-color: #000000; color: #f4f4f5; font-family: 'Inter', sans-serif; 
     -webkit-tap-highlight-color: transparent; overflow-x: hidden; 
     user-select: none; -webkit-user-select: none; 
-    /* FIX iOS: Respeta la barra inferior flotante de los iPhone */
     padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
 }
 input, select, textarea { user-select: auto; -webkit-user-select: auto; }
@@ -12,6 +11,9 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 .screen { display: none; opacity: 0; transition: opacity 0.3s ease; } 
 .screen.active { display: block; opacity: 1; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* FIX SCROLL: Forzamos que las pantallas tengan padding inferior para que la barra no tape el último botón */
+main { flex: 1 0 auto; padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
 
 .bf-grid { display: grid; width: 100vw; height: 100svh; gap: 4px; background: #000000; }
 
@@ -24,16 +26,18 @@ input, select, textarea { user-select: auto; -webkit-user-select: auto; }
 .mana-g { background-color: #22c55e !important; color: #ffffff !important; }     
 .opacity-30.mana-w, .opacity-30.mana-u, .opacity-30.mana-b, .opacity-30.mana-r, .opacity-30.mana-g { background-color: #27272a !important; color: #71717a !important; border-color: transparent !important; }
 
-/* --- ARQUITECTURA DE GRIDS (RECUPERADA DE AB33C3F) --- */
+/* --- ARQUITECTURA DE GRIDS --- */
 .bf-2p { grid-template-rows: 1fr 1fr; }
 .bf-3p { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; }
 .bf-3p-top { grid-column: span 2; }
 .bf-4p-grid { grid-template-rows: 1fr 1fr; grid-template-columns: 1fr 1fr; }     
-.bf-4p-cross { grid-template-rows: 30svh 40svh 30svh; grid-template-columns: 1fr 1fr; }
+/* FIX LAYOUT CRUZ: Mantenemos el grid activo */
+.bf-4p-cross { display: grid !important; grid-template-rows: 30svh 40svh 30svh; grid-template-columns: 1fr 1fr; position: fixed; inset: 0; z-index: 40; }
 .cross-pos-0 { grid-area: 1 / 1 / 2 / 3; }
 .cross-pos-1 { grid-area: 2 / 1 / 3 / 2; }
 .cross-pos-2 { grid-area: 2 / 2 / 3 / 3; }
 .cross-pos-3 { grid-area: 3 / 1 / 4 / 3; }
+
 .bf-5p { grid-template-rows: 1fr 1fr; grid-template-columns: repeat(6, 1fr); }   
 .bf-5p > div:nth-child(1), .bf-5p > div:nth-child(2) { grid-column: span 3; }    
 .bf-5p > div:nth-child(3), .bf-5p > div:nth-child(4), .bf-5p > div:nth-child(5) { grid-column: span 2; }

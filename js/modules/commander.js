@@ -162,19 +162,36 @@ function handleTapStart(e, idx, amt) { if (e && e.cancelable) e.preventDefault()
 function handleTapEnd(e) { if (e && e.cancelable) e.preventDefault(); clearTimeout(holdTimer); clearInterval(holdInterval); setTimeout(() => checkEliminations(), 50); }
 function changeLife(idx, amt) { if (state.currentMatch[idx].isDead) return; state.currentMatch[idx].life += amt; const displayNode = document.getElementById(`life-display-${idx}`); if (displayNode) displayNode.innerText = state.currentMatch[idx].life; saveData(); }
 
-// --- FIX: RENDER BATTLEFIELD Y MAPEO DE CLASES CSS ---
+// --- FIX LAYOUT TOGGLE ---
+window.toggleLayout = function() { 
+    state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; 
+    const grid = document.getElementById('battlefield-grid');
+    if(grid) {
+        if(state.layoutMode === 'cross') {
+            grid.classList.remove('bf-grid', 'bf-4p-grid');
+            grid.classList.add('bf-4p-cross');
+        } else {
+            grid.classList.remove('bf-4p-cross');
+            grid.classList.add('bf-grid', 'bf-4p-grid');
+        }
+    }
+    renderBattlefield(); 
+    window.toggleCenterMenu(); 
+    saveData(); 
+}
+
 function renderBattlefield() {
     const grid = document.getElementById('battlefield-grid'); const count = state.currentMatch.length;
-    grid.className = 'bf-grid';
     
-    if (count === 2) grid.classList.add('bf-2p'); 
-    else if (count === 3) grid.classList.add('bf-3p'); 
-    else if (count === 4) {
-        if (state.layoutMode === 'cross') { grid.classList.remove('bf-grid'); grid.classList.add('bf-4p-cross'); }
-        else grid.classList.add('bf-4p-grid');
+    // Solo forzamos clases si no estamos en el modo cruzado de 4
+    if (!(count === 4 && state.layoutMode === 'cross')) {
+        grid.className = 'bf-grid';
+        if (count === 2) grid.classList.add('bf-2p'); 
+        else if (count === 3) grid.classList.add('bf-3p'); 
+        else if (count === 4) grid.classList.add('bf-4p-grid');
+        else if (count === 5) grid.classList.add('bf-5p'); 
+        else grid.classList.add('bf-6p');  
     }
-    else if (count === 5) grid.classList.add('bf-5p'); 
-    else grid.classList.add('bf-6p');  
     
     grid.innerHTML = '';
 
@@ -225,8 +242,6 @@ function renderBattlefield() {
 
 function renderCmdrDamageIcons(player) { let html = ''; for (let attackerIdx in player.cmdrDmg) { let dmg = player.cmdrDmg[attackerIdx]; if (dmg > 0 && state.currentMatch[attackerIdx] && !state.currentMatch[attackerIdx].isDead) { html += `<div class="size-10 rounded-full bg-red-900/90 border border-red-500/50 flex items-center justify-center flex-col shadow-lg"><span class="text-[9px] font-bold text-red-200 leading-none">${esc(state.currentMatch[attackerIdx].player[0].toUpperCase())}</span><span class="text-[14px] font-black text-white leading-none">${dmg}</span></div>`; } } return html; }
 
-window.toggleLayout = function() { state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; renderBattlefield(); window.toggleCenterMenu(); saveData(); }
-
 let currentCmdrTarget = -1;
 window.openCmdrModal = function(idx, rotDeg) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button onclick="window.changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button onclick="window.changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>` : '').join(''); const box = document.getElementById('cmdr-modal-box'); box.style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
 window.changeCmdrDmg = function(tI, aI, v) { saveUndoState(); let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); window.openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 50); }
@@ -265,7 +280,7 @@ async function checkEliminations() {
     isCheckingDeath = false; 
 }
 
-// --- FIX: GENERADOR DINÁMICO DEL MENÚ RADIAL (SIN DUPLICADOS) ---
+// --- FIX RADIAL MENU BUILDER ---
 window.buildRadialMenu = function() {
     let radial = document.getElementById('radial-menu-overlay');
     if (!radial) return;
@@ -275,7 +290,6 @@ window.buildRadialMenu = function() {
     let wlColor = wlActive ? '#22c55e' : '#ef4444';
     let wlText = wlActive ? 'AWAKE ON' : 'AWAKE OFF';
 
-    // Purgar botones viejos para evitar duplicados como el "Keep on" antiguo
     let existingBtns = radial.querySelectorAll('.radial-btn');
     existingBtns.forEach(b => b.remove());
 
@@ -298,7 +312,7 @@ window.toggleCenterMenu = function() {
     const menu = document.getElementById('radial-menu-overlay'); const icon = document.getElementById('center-menu-icon');
     if (menu) {
         if(menuOpen) { 
-            window.buildRadialMenu(); // Construye el menú en el momento de abrir
+            window.buildRadialMenu(); 
             menu.classList.add('active'); 
             if(icon) { icon.innerText = 'close'; icon.classList.add('rotate-90'); icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
             
@@ -319,7 +333,7 @@ window.handleWakeLockToggle = async function() {
     const isActive = await toggleWakeLock(); 
     const btn = document.getElementById('wake-lock-btn'); 
     const lbl = document.getElementById('wake-lbl');
-    if(btn) { btn.style.borderColor = isActive ? '#22c55e' : '#ef4444'; btn.style.color = isActive ? '#22c55e' : '#ef4444'; }
+    if(btn) { btn.style.borderColor = isActive ? '#22c55e' : '#ef4444'; btn.style.color = isActive ? '#22c55e' : '#ef4444'; } 
     if(lbl) { lbl.innerText = isActive ? 'AWAKE ON' : 'AWAKE OFF'; }
     mfModal.show(isActive ? "Wake Lock ON" : "Wake Lock OFF", isActive ? "Screen will stay awake." : "Normal timeout restored.", "flare"); 
 }
