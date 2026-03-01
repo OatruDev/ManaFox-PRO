@@ -359,3 +359,9 @@ export function handleCommanderNext() {
     }
     else if (state.step === 4) initBattlefield();
 }
+
+export function goBackCommander() {
+    if (state.step === 2) { switchScreen(1); renderHistory(); }
+    else if (state.step === 3) switchScreen(2);
+    else if (state.step === 4) switchScreen(3);
+}
