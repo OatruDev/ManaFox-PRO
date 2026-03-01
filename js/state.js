@@ -1,14 +1,18 @@
 // /js/state.js
+import { baseDecks, generatePlayerID, generateDeckID } from './utils.js';
 
 const defaultState = {
     gameMode: 'commander',
     step: 1,
     players: 2,
-    decks: 3, 
+    decks: 3,
     deckData: [],
-    savedDecks: [],
+    savedDecks: [...baseDecks],
     tempPlayerNames: [],
-    savedPlayers: [],
+    // FOX-00001 reservado para ti.
+    savedPlayers: [
+        { id: "FOX-00001", name: "Daniel", addedAt: Date.now() }
+    ],
     playerLocks: [],
     playerBans: [],
     currentMatch: [],
@@ -16,6 +20,12 @@ const defaultState = {
     undoStack: [],
     history: [],
     layoutMode: 'grid',
+    
+    // Variables de Tiempo
+    matchStartTime: null,
+    matchDurationSeconds: 0,
+    matchFinished: false,
+
     js: { count: 4, players: [], rounds: [], currentRound: 0, currentView: 'round', totalRounds: 0 },
     manaColors: [
         { id: 'W', cls: 'mana-w', icon: '<i class="ms ms-w"></i>' },
@@ -33,23 +43,32 @@ export function loadLocalState() {
         const local = localStorage.getItem('manafox-offline-state');
         if (local) {
             const parsed = JSON.parse(local);
-            state = { ...state, ...parsed };
-
-            // ESCUDO DE MIGRACIÓN PARA IDS
-            if (Array.isArray(state.savedPlayers)) {
-                state.savedPlayers = state.savedPlayers.map(p => {
-                    if (typeof p === 'string') {
-                        return { id: `FOX-${Math.random().toString(36).substr(2,5).toUpperCase()}`, name: p, addedAt: Date.now() };
-                    }
-                    return p;
-                }).filter(p => p && p.name); 
+            state = { ...defaultState, ...parsed };
+            
+            // --- LEGACY MIGRATION SHIELD ---
+            // Migrar Jugadores Antiguos (Strings -> Objetos FOX)
+            if(state.savedPlayers.length > 0 && typeof state.savedPlayers[0] === 'string') {
+                console.log("Migrando jugadores legacy a IDs FOX...");
+                state.savedPlayers = state.savedPlayers.map(name => ({ 
+                    id: name.toLowerCase() === 'daniel' ? "FOX-00001" : generatePlayerID(), 
+                    name: name, 
+                    addedAt: Date.now() 
+                }));
+            }
+            // Migrar Mazos Antiguos (Sin ID -> Con DCK ID)
+            if (state.savedDecks.length > 0 && !state.savedDecks[0].id) {
+                console.log("Migrando mazos legacy a IDs DCK...");
+                state.savedDecks = state.savedDecks.map(deck => ({
+                    ...deck,
+                    id: deck.id || generateDeckID()
+                }));
             }
         }
     } catch (e) { console.warn("Error loading state", e); }
 }
 
 export function saveData() {
-    try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } 
+    try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); }
     catch (e) { console.warn("Error saving state", e); }
 }
 
