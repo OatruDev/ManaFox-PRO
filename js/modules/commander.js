@@ -59,9 +59,11 @@ export function initCommander() {
     if (state.step < 5) renderHistory();
 }
 
-function updateCount(t, v) { state[t] = Math.min(t === 'players' ? 6 : 20, Math.max(2, state[t] + v)); document.getElementById('count-' + t).innerText = state[t]; saveData(); }
-function applyDandLPreset() { state.players = 2; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura"]; state.playerLocks = []; state.playerBans = [[], [4]]; saveData(); goToDecks(); }
-function applyDJLPreset() { state.players = 3; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura", "Julio"]; state.playerLocks = []; state.playerBans = [[], [4], []]; saveData(); goToDecks(); }
+// --- CONEXIONES GLOBALES PARA HTML ---
+
+window.updateCount = function(t, v) { state[t] = Math.min(t === 'players' ? 6 : 20, Math.max(2, state[t] + v)); document.getElementById('count-' + t).innerText = state[t]; saveData(); }
+window.applyDandLPreset = function() { state.players = 2; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura"]; state.playerLocks = []; state.playerBans = [[], [4]]; saveData(); goToDecks(); }
+window.applyDJLPreset = function() { state.players = 3; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura", "Julio"]; state.playerLocks = []; state.playerBans = [[], [4], []]; saveData(); goToDecks(); }
 
 function goToDecks() {
     if (state.deckData.length < state.decks) { let diff = state.decks - state.deckData.length; for(let i = 0; i < diff; i++) { state.deckData.push({ name: '', colors: [] }); } } 
@@ -74,16 +76,16 @@ function buildDeckDOM() {
     const lib = state.savedDecks || [];
     state.deckData.forEach((d, i) => {
         const archName = getArchetype(d.colors); 
-        const colorsHTML = state.manaColors.map(m => `<button onclick="window.toggleColor(${i},'${m.id}')" aria-label="Toggle ${m.id} color" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id) ? 'active' : 'opacity-30'}">${m.icon}</button>`).join('');
+        const colorsHTML = state.manaColors.map(m => `<button aria-label="Toggle Color" onclick="window.toggleColor(${i},'${m.id}')" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id) ? 'active' : 'opacity-30'}">${m.icon}</button>`).join('');
         c.innerHTML += `<div class="bg-app-surface p-4 rounded-2xl border border-white/5 shadow-sm transition-all duration-300" id="deck-wrapper-${i}"><div class="flex justify-between items-center mb-2"><div class="flex flex-col"><label for="deck-input-${i}" class="text-[10px] font-bold text-app-primary uppercase cursor-pointer">Deck #${i + 1}</label><span class="text-[11px] font-black text-white bg-white/10 px-2 py-0.5 rounded-md mt-1 uppercase tracking-wider">${archName}</span></div><div class="flex gap-2"><select onchange="window.loadDeck(${i},this.value)" aria-label="Load from library" class="text-[10px] bg-app-surface text-white border-none p-0 w-24 uppercase"><option value="" disabled selected>Library</option>${lib.map((ld, idx) => `<option value="${idx}">${esc(ld.name || 'Unknown')}</option>`).join('')}</select><button onclick="window.removeDeck(${i})" aria-label="Delete Deck" class="text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button></div></div><input type="text" id="deck-input-${i}" maxlength="40" oninput="window.updateDeckName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl text-sm mb-3 focus:ring-1 focus:ring-app-primary text-white transition-all" value="${esc(d.name)}" placeholder="Deck Name (Required)"><div class="flex gap-2">${colorsHTML}</div></div>`;
     });
 }
 
 window.updateDeckName = function(i, val) { state.deckData[i].name = val; saveData(); }
-function loadDeck(di, li) { const d = state.savedDecks[li]; state.deckData[di] = { id: d.id, name: d.name, colors: [...d.colors] }; buildDeckDOM(); saveData(); }
-function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors.includes(mi) ? d.colors.filter(c => c !== mi) : [...d.colors, mi]; buildDeckDOM(); saveData(); }
-function removeDeck(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
-function addExtraDeck() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
+window.loadDeck = function(di, li) { const d = state.savedDecks[li]; state.deckData[di] = { id: d.id, name: d.name, colors: [...d.colors] }; buildDeckDOM(); saveData(); }
+window.toggleColor = function(di, mi) { const d = state.deckData[di]; d.colors = d.colors.includes(mi) ? d.colors.filter(c => c !== mi) : [...d.colors, mi]; buildDeckDOM(); saveData(); }
+window.removeDeck = function(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
+window.addExtraDeck = function() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
 
 function syncDecksToLibrary() {
     let allE = state.savedDecks || []; let nw = false;
@@ -117,10 +119,11 @@ window.openLibraryManager = function() {
 }
 
 window.closeLibraryManager = function() { const m = document.getElementById('library-modal'); if(m) { m.style.display = 'none'; m.classList.add('hidden'); } buildDeckDOM(); }
+window.deleteSavedDeck = async function(idx) { const c = await mfModal.show("Delete Deck?", "Permanently remove this custom deck?", "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); window.openLibraryManager(); } }
 
 function savePlayerInputs() { for (let i = 0; i < state.players; i++) { let input = document.getElementById(`p-in-${i}`); if (input) state.tempPlayerNames[i] = esc(input.value); } }
-function setPlayerLock(pIdx, dIdx) { savePlayerInputs(); state.playerLocks[pIdx] = dIdx; if (dIdx !== -1 && state.playerBans[pIdx] && state.playerBans[pIdx].includes(dIdx)) { state.playerBans[pIdx] = state.playerBans[pIdx].filter(id => id !== dIdx); } saveData(); goToPlayers(); }
-function toggleBan(pIdx, dIdx) {
+window.setPlayerLock = function(pIdx, dIdx) { savePlayerInputs(); state.playerLocks[pIdx] = dIdx; if (dIdx !== -1 && state.playerBans[pIdx] && state.playerBans[pIdx].includes(dIdx)) { state.playerBans[pIdx] = state.playerBans[pIdx].filter(id => id !== dIdx); } saveData(); goToPlayers(); }
+window.toggleBan = function(pIdx, dIdx) {
     savePlayerInputs(); if (!state.playerBans[pIdx]) state.playerBans[pIdx] = []; if (state.playerLocks[pIdx] !== undefined && state.playerLocks[pIdx] !== -1) return;
     let validD = state.deckData.filter(d => d.name.trim() !== ""); let maxBans = Math.max(0, validD.length - 2); let idx = state.playerBans[pIdx].indexOf(dIdx);
     if (idx > -1) { state.playerBans[pIdx].splice(idx, 1); } else { if (state.playerBans[pIdx].length >= maxBans) { return mfModal.show("Limit Reached", "At least 2 decks must remain available.", "warning"); } state.playerBans[pIdx].push(dIdx); }
@@ -142,7 +145,7 @@ function goToPlayers() {
         });
         let bansHTML = validD.map((d) => {
             const isBanned = state.playerBans[i].includes(d.origIdx); const isDisabled = hasLock || (!isBanned && atBanLimit); const titleMsg = hasLock ? "Cannot ban when a deck is locked." : (isDisabled ? `Max bans reached (${maxBans})` : "Ban this deck");
-            return `<button onclick="window.toggleBan(${i}, ${d.origIdx})" aria-label="${titleMsg}" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}"><span class="material-symbols-outlined text-[10px] align-middle mr-1">${isBanned ? 'block' : 'check_box_outline_blank'}</span> ${esc(d.name)}</button>`;
+            return `<button aria-label="${titleMsg}" onclick="window.toggleBan(${i}, ${d.origIdx})" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}"><span class="material-symbols-outlined text-[10px] align-middle mr-1">${isBanned ? 'block' : 'check_box_outline_blank'}</span> ${esc(d.name)}</button>`;
         }).join('');
         c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button aria-label="Remove Player" onclick="window.removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label for="p-in-${i}" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block cursor-pointer">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="window.setPlayerLock(${i}, parseInt(this.value))" aria-label="Lock deck" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex justify-between items-center"><span>Vetoes (Bans)</span><span class="text-slate-600 font-normal normal-case text-[8px] flex items-center gap-1">Swipe <span class="material-symbols-outlined text-[10px]">arrow_forward</span></span></div><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`;
     }
@@ -150,10 +153,10 @@ function goToPlayers() {
 }
 
 function renderSavedPlayers() { document.getElementById('saved-players-container').innerHTML = state.savedPlayers.map((p, i) => `<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button aria-label="Remove Saved Player" onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAdd('${esc(p.name)}')" class="setup-input size-12 rounded-full border border-app-primary bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-primary/20 transition-colors">${esc(p.name[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(p.name)}</span></div>`).join(''); }
-function quickAdd(n) { for (let i = 0; i < state.players; i++) { const inp = document.getElementById('p-in-' + i); if (inp && !inp.value) { inp.value = n; state.tempPlayerNames[i] = n; break; } } saveData(); }
-async function deleteSavedPlayer(i) { const c = await mfModal.show("Remove Player?", `Permanently remove "${esc(state.savedPlayers[i].name)}"?`, "person_remove", "confirm"); if (c) { state.savedPlayers.splice(i, 1); saveData(); renderSavedPlayers(); if (state.savedPlayers.length === 0) document.getElementById('saved-players-section').classList.add('hidden'); } }
-function removePlayer(i) { if (state.players <= 1) return; state.tempPlayerNames.splice(i, 1); state.playerLocks.splice(i, 1); state.playerBans.splice(i, 1); state.players--; goToPlayers(); saveData(); }
-function addExtraPlayer() { state.players++; goToPlayers(); saveData(); }        
+window.quickAdd = function(n) { for (let i = 0; i < state.players; i++) { const inp = document.getElementById('p-in-' + i); if (inp && !inp.value) { inp.value = n; state.tempPlayerNames[i] = n; break; } } saveData(); }
+window.deleteSavedPlayer = async function(i) { const c = await mfModal.show("Remove Player?", `Permanently remove "${esc(state.savedPlayers[i].name)}"?`, "person_remove", "confirm"); if (c) { state.savedPlayers.splice(i, 1); saveData(); renderSavedPlayers(); if (state.savedPlayers.length === 0) document.getElementById('saved-players-section').classList.add('hidden'); } }
+window.removePlayer = function(i) { if (state.players <= 1) return; state.tempPlayerNames.splice(i, 1); state.playerLocks.splice(i, 1); state.playerBans.splice(i, 1); state.players--; goToPlayers(); saveData(); }
+window.addExtraPlayer = function() { state.players++; goToPlayers(); saveData(); }        
 
 function executeAssignment() {
     let validD = state.deckData.filter(d => d.name.trim() !== ""); let pool = validD.map((d, index) => ({ ...d, origIdx: index })); state.currentMatch = [];
@@ -185,14 +188,9 @@ function initBattlefield() { playTransition(GIFS.BATTLE, 2600, async () => { ren
 function saveUndoState() { if (!state.undoStack) state.undoStack = []; state.undoStack.push(JSON.parse(JSON.stringify(state.currentMatch))); if (state.undoStack.length > 20) state.undoStack.shift(); }
 window.undoLastAction = function() { if (menuOpen) window.toggleCenterMenu(); if (!state.undoStack || state.undoStack.length === 0) return mfModal.show("Undo", "No previous actions.", "info"); state.currentMatch = state.undoStack.pop(); saveData(); renderBattlefield(); }
 
-function handleTapStart(e, idx, amt) { if (e && e.cancelable) e.preventDefault(); if (state.currentMatch[idx].isDead) return; saveUndoState(); changeLife(idx, amt); }
-function handleTapEnd(e) { if (e && e.cancelable) e.preventDefault(); setTimeout(() => checkEliminations(), 50); }
+window.handleTapStart = function(e, idx, amt) { if (e && e.cancelable) e.preventDefault(); if (state.currentMatch[idx].isDead) return; saveUndoState(); changeLife(idx, amt); }
+window.handleTapEnd = function(e) { if (e && e.cancelable) e.preventDefault(); setTimeout(() => checkEliminations(), 50); }
 function changeLife(idx, amt) { if (state.currentMatch[idx].isDead) return; state.currentMatch[idx].life += amt; const displayNode = document.getElementById(`life-display-${idx}`); if (displayNode) displayNode.innerText = state.currentMatch[idx].life; saveData(); }
-
-window.toggleLayout = function() { 
-    state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; 
-    renderBattlefield(); window.toggleCenterMenu(); saveData(); 
-}
 
 function renderBattlefield() {
     const grid = document.getElementById('battlefield-grid'); const count = state.currentMatch.length;
@@ -213,8 +211,8 @@ function renderBattlefield() {
         grid.innerHTML += `
         <div class="relative w-full h-full flex flex-col justify-center items-center ${posClass} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}">
             <div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}">
-                <div class="flex-1 w-full h-full cursor-pointer active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, 1)" ontouchstart="handleTapStart(event, ${i}, 1)" onmouseup="handleTapEnd(event)" ontouchend="handleTapEnd(event)"></div>
-                <div class="flex-1 w-full h-full cursor-pointer active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, -1)" ontouchstart="handleTapStart(event, ${i}, -1)" onmouseup="handleTapEnd(event)" ontouchend="handleTapEnd(event)"></div>
+                <div class="flex-1 w-full h-full cursor-pointer active:bg-white/10 transition-colors" onmousedown="window.handleTapStart(event, ${i}, 1)" ontouchstart="window.handleTapStart(event, ${i}, 1)" onmouseup="window.handleTapEnd(event)" ontouchend="window.handleTapEnd(event)"></div>
+                <div class="flex-1 w-full h-full cursor-pointer active:bg-white/10 transition-colors" onmousedown="window.handleTapStart(event, ${i}, -1)" ontouchstart="window.handleTapStart(event, ${i}, -1)" onmouseup="window.handleTapEnd(event)" ontouchend="window.handleTapEnd(event)"></div>
             </div>
             <div class="absolute inset-0 m-auto z-20 pointer-events-none flex flex-col justify-center items-center transition-opacity ${p.isDead ? 'opacity-20' : ''}" style="transform: rotate(${rotDeg}deg);">
                 <h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate w-full px-2 text-center">${esc(p.player)}</h3>   
@@ -292,6 +290,7 @@ window.toggleCenterMenu = function() {
 }
 
 window.handleWakeLockToggle = async function() { const isActive = await toggleWakeLock(); mfModal.show(isActive ? "Awake ON" : "Awake OFF", "", "flare"); window.toggleCenterMenu(); }
+window.toggleKeepAwake = window.handleWakeLockToggle; // Alias para el HTML
 window.resetLife = async function() { window.toggleCenterMenu(); const c = await mfModal.show("Reset Match?", "Life back to 40.", "refresh", "confirm"); if (c) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); state.undoStack = []; state.matchDurationSeconds = 0; saveData(); renderBattlefield(); } }
 window.rollD20All = function() { window.toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
 window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
@@ -360,26 +359,3 @@ export function handleCommanderNext() {
     }
     else if (state.step === 4) initBattlefield();
 }
-
-// --- GLOBAL BINDINGS PARA HTML (EL PUENTE QUE FALTABA) ---
-window.updateCount = updateCount;
-window.applyDandLPreset = applyDandLPreset;
-window.applyDJLPreset = applyDJLPreset;
-window.loadDeck = loadDeck;
-window.toggleColor = toggleColor;
-window.removeDeck = removeDeck;
-window.addExtraDeck = addExtraDeck;
-window.deleteSavedPlayer = deleteSavedPlayer;
-window.quickAdd = quickAdd;
-window.removePlayer = removePlayer;
-window.addExtraPlayer = addExtraPlayer;
-window.handleTapStart = handleTapStart;
-window.handleTapEnd = handleTapEnd;
-window.setPlayerLock = setPlayerLock;
-window.toggleBan = toggleBan;
-
-// Y la función de borrar mazos que me dejé en el tintero:
-window.deleteSavedDeck = async function(idx) {
-    const c = await mfModal.show("Delete Deck?", "Permanently remove this custom deck?", "delete", "confirm");
-    if (c) { state.savedDecks.splice(idx, 1); saveData(); window.openLibraryManager(); }
-};
