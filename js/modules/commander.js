@@ -3,6 +3,7 @@ import { state, saveData } from '../state.js';
 import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
 import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme, getArchetype, generatePlayerID, generateDeckID, formatLiveClock, formatTimeISO } from '../utils.js';
+import { saveMatchToGitHub } from './github-db.js'; // <-- CONEXIÓN AL BACKEND
 
 let wakeLock = null;
 let matchInterval = null;
@@ -20,7 +21,6 @@ document.addEventListener('visibilitychange', async () => {
     if (wakeLock !== null && document.visibilityState === 'visible' && state.step === 5) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }
 });
 
-// --- FIX RELOJ: Renderizado inmediato y fuente Inter con tabular-nums ---
 function startMatchClock() {
     if (matchInterval) clearInterval(matchInterval);
     state.matchStartTime = Date.now();
@@ -32,14 +32,14 @@ function startMatchClock() {
             if (icon && !menuOpen) {
                 icon.innerText = formatLiveClock(state.matchDurationSeconds);
                 icon.style.fontFamily = "'Inter', sans-serif";
-                icon.style.fontVariantNumeric = "tabular-nums"; // Evita que los números tiemblen
+                icon.style.fontVariantNumeric = "tabular-nums";
                 icon.style.fontSize = '18px';
                 icon.style.fontWeight = '900';
             }
         }
     };
 
-    tickClock(); // Pinta el segundo 0 al instante, sin saltos.
+    tickClock();
     matchInterval = setInterval(() => {
         if (state.step === 5 && !state.matchFinished) {
             state.matchDurationSeconds++;
@@ -342,14 +342,7 @@ window.toggleCenterMenu = function() {
         if(menuOpen) { 
             window.buildRadialMenu(); 
             menu.classList.add('active'); 
-            if(icon) { 
-                icon.innerText = 'close'; 
-                icon.classList.add('rotate-90'); 
-                icon.style.fontFamily = "'Material Symbols Outlined'"; 
-                icon.style.fontSize = '30px'; 
-                icon.style.fontWeight = 'normal'; 
-                icon.style.fontVariantNumeric = "normal";
-            }
+            if(icon) { icon.innerText = 'close'; icon.classList.add('rotate-90'); icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; icon.style.fontVariantNumeric = "normal";}
             
             const btns = Array.from(menu.querySelectorAll('.radial-btn:not(.hidden)')); const R = 95; const startAngle = -Math.PI / 2; const angleStep = (Math.PI * 2) / btns.length; 
             btns.forEach((btn, index) => { const angle = startAngle + index * angleStep; const x = Math.round(Math.cos(angle) * R); const y = Math.round(Math.sin(angle) * R); btn.style.transform = `translate(${x}px, ${y}px) scale(1)`;       btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.style.transitionDelay = `${index * 0.05}s`; }); 
@@ -357,19 +350,7 @@ window.toggleCenterMenu = function() {
             menu.classList.remove('active'); 
             if(icon) {
                 icon.classList.remove('rotate-90');
-                if (state.step === 5) { 
-                    icon.innerText = formatLiveClock(state.matchDurationSeconds); 
-                    icon.style.fontFamily = "'Inter', sans-serif"; 
-                    icon.style.fontVariantNumeric = "tabular-nums";
-                    icon.style.fontSize = '18px'; 
-                    icon.style.fontWeight = '900'; 
-                } else { 
-                    icon.innerText = 'apps'; 
-                    icon.style.fontFamily = "'Material Symbols Outlined'"; 
-                    icon.style.fontVariantNumeric = "normal";
-                    icon.style.fontSize = '30px'; 
-                    icon.style.fontWeight = 'normal'; 
-                }
+                if (state.step === 5) { icon.innerText = formatLiveClock(state.matchDurationSeconds); icon.style.fontFamily = "'Inter', sans-serif"; icon.style.fontVariantNumeric = "tabular-nums"; icon.style.fontSize = '18px'; icon.style.fontWeight = '900'; } else { icon.innerText = 'apps'; icon.style.fontFamily = "'Material Symbols Outlined'"; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; icon.style.fontVariantNumeric = "normal"; }
             }
             const btns = Array.from(menu.querySelectorAll('.radial-btn'));        btns.forEach(btn => { btn.style.transform = `translate(0px, 0px) scale(0.3)`; btn.style.opacity = '0'; btn.style.pointerEvents = 'none'; btn.style.transitionDelay = '0s'; }); 
         }
@@ -391,6 +372,7 @@ window.rollD20All = function() { window.toggleCenterMenu(); document.getElementB
 window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
 window.goToScreen6Manual = function() { clearInterval(matchInterval); state.matchFinished = false; document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-bold text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); switchScreen(6); }
 
+// --- ACELERADOR FINAL: ENVÍO A BASE DE DATOS ---
 window.showUltimateWinner = function(idx) {
     releaseWakeLock(); clearInterval(matchInterval);
     playTransition(GIFS.WINNER, 3200, () => {
@@ -398,8 +380,24 @@ window.showUltimateWinner = function(idx) {
         triggerConfetti(w.deck ? w.deck.colors : []);
         
         let participantsLog = state.currentMatch.map(p => ({ player_id: p.id, deck_id: p.deck ? p.deck.id : null, result: p.id === w.id ? "winner" : "eliminated", cause: p.deathCause, killer: p.killerId, eliminated_at: p.timeOfDeath }));
-        state.history.unshift({ id: 'MTC-' + Math.random().toString(36).substring(2,7).toUpperCase(), date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), mode: 'Commander', duration: formatTimeISO(state.matchDurationSeconds), winner_id: w.id, winner: w.player, pairings: state.currentMatch, participants: participantsLog });
+        
+        const matchRecord = { 
+            id: 'MTC-' + Math.random().toString(36).substring(2,7).toUpperCase(), 
+            date: new Date().toISOString(), 
+            date_display: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+            mode: 'commander', 
+            duration: formatTimeISO(state.matchDurationSeconds), 
+            winner_id: w.id, 
+            winner: w.player, 
+            pairings: state.currentMatch, 
+            participants: participantsLog 
+        };
+
+        state.history.unshift(matchRecord);
         saveData(); renderHistory();
+
+        // 🚀 LLAMADA A VERCEL QUE HABÍA BORRADO
+        saveMatchToGitHub(matchRecord);
         
         document.getElementById('screen-6').innerHTML = `<div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full"><div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-yellow-400 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)]">emoji_events</span></div><h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${esc(w.player)}</h2><h3 class="text-xl font-bold text-slate-300 mb-8 bg-white/5 px-4 py-1 rounded-full border border-white/10 uppercase">${w.deck ? esc(w.deck.name) : ''}</h3><div class="bg-app-surface p-6 rounded-2xl border border-white/5 shadow-lg mb-10 w-full max-w-sm"><p class="text-slate-200 italic text-lg leading-relaxed">"${quote}"</p></div><button onclick="window.startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button></div>`;
         switchScreen(6);
@@ -417,7 +415,7 @@ window.startOver = function() {
 function renderHistory() {
     const c = document.getElementById('history-container'); if(!c) return;
     if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); else document.getElementById('history-section').classList.add('hidden');      
-    c.innerHTML = state.history.slice(0, 5).map((m, i) => `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button onclick="window.deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 opacity-100 transition-all"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex justify-between mb-2 text-slate-500 uppercase font-bold tracking-tighter pr-8"><span>${m.date}</span><span class="text-yellow-400">🏆 ${esc(m.winner)} <span class="text-[8px] text-slate-600 ml-1">(${m.mode || 'Commander'})</span></span></div>${m.duration ? `<p class="text-[9px] text-slate-500 mb-2">⏱️ ${m.duration}</p>` : ''}${(m.mode === 'Jumpstart' && m.podiumLog) ? `<div class="mt-2 text-[9px] text-slate-400 border-t border-white/5 pt-1">Podium: 🥇${esc(m.podiumLog[0])} 🥈${esc(m.podiumLog[1] || '--')} 🥉${esc(m.podiumLog[2] || '--')}</div>` : (m.pairings ? m.pairings.map(p => `<div class="flex justify-between py-0.5"><span class="text-slate-300">${esc(p.player)}</span><span class="text-slate-400 font-medium">${p.deck ? esc(p.deck.name) : ''}</span></div>`).join('') : '')}</div>`).join('');
+    c.innerHTML = state.history.slice(0, 5).map((m, i) => `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button onclick="window.deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 opacity-100 transition-all"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex justify-between mb-2 text-slate-500 uppercase font-bold tracking-tighter pr-8"><span>${m.date_display || m.date}</span><span class="text-yellow-400">🏆 ${esc(m.winner)} <span class="text-[8px] text-slate-600 ml-1">(${m.mode || 'Commander'})</span></span></div>${m.duration ? `<p class="text-[9px] text-slate-500 mb-2">⏱️ ${m.duration}</p>` : ''}${(m.mode === 'Jumpstart' && m.podiumLog) ? `<div class="mt-2 text-[9px] text-slate-400 border-t border-white/5 pt-1">Podium: 🥇${esc(m.podiumLog[0])} 🥈${esc(m.podiumLog[1] || '--')} 🥉${esc(m.podiumLog[2] || '--')}</div>` : (m.pairings ? m.pairings.map(p => `<div class="flex justify-between py-0.5"><span class="text-slate-300">${esc(p.player)}</span><span class="text-slate-400 font-medium">${p.deck ? esc(p.deck.name) : ''}</span></div>`).join('') : '')}</div>`).join('');
 }
 window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete Match?", "This action will remove the match from the history.", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
 
