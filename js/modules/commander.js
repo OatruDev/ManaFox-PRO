@@ -49,7 +49,11 @@ function startMatchClock() {
 }
 
 export function initCommander() {
-    if (state.step === 1) { document.getElementById('count-players').innerText = state.players; document.getElementById('count-decks').innerText = state.decks; } 
+    if (state.step === 1) { 
+        document.getElementById('count-players').innerText = state.players; 
+        document.getElementById('count-decks').innerText = state.decks; 
+        window.syncCloudHistory(); // 🐛 BUG 5: Auto-Pull from GitHub on load
+    } 
     else if (state.step === 2) buildDeckDOM(); 
     else if (state.step === 3) goToPlayers(); 
     else if (state.step === 4) buildResultsDOM(); 
@@ -176,12 +180,26 @@ function executeAssignment() {
 }
 
 window.reassignDecks = function() { executeAssignment(); }
+
+// 🐛 BUG 4 CORREGIDO: Se restauró la lógica para mostrar los mazos restantes
 function buildResultsDOM() {
     const c = document.getElementById('assignments-container'); c.innerHTML = '';
     state.currentMatch.forEach(m => {
         const mH = m.deck ? m.deck.colors.map(col => `<div class="size-5 rounded-full flex items-center justify-center mana-btn ${state.manaColors.find(x => x.id === col).cls} active border border-black/30 shadow-sm">${state.manaColors.find(x => x.id === col).icon}</div>`).join('') : '';
         c.innerHTML += `<div class="bg-app-surface/90 backdrop-blur-sm p-4 rounded-2xl border border-white/5 flex justify-between items-center shadow-lg transition-colors"><div class="flex items-center gap-4"><div class="size-12 rounded-full bg-app-surface-light border border-white/10 flex items-center justify-center font-bold text-lg text-white">${esc(m.player[0].toUpperCase())}</div><div><h3 class="font-bold text-[15px] text-white">${esc(m.player)}</h3><p class="text-app-accent font-bold text-[10px] uppercase tracking-widest mt-1">Assigned to</p></div></div><div class="text-right max-w-[45%] flex flex-col items-end"><span class="text-app-primary font-bold text-sm truncate drop-shadow-md">${m.deck ? esc(m.deck.name) : 'Unknown'}</span><div class="flex gap-1 justify-end mt-1.5 min-h-[20px]">${mH}</div></div></div>`;
     });
+
+    const remSec = document.getElementById('rem-section');
+    const remCont = document.getElementById('remaining-container');
+    if (state.remainingDecks && state.remainingDecks.length > 0) {
+        remSec.classList.remove('hidden');
+        remCont.innerHTML = state.remainingDecks.map(d => {
+            const mH = d.colors ? d.colors.map(c => `<i class="ms ms-${c.toLowerCase()} text-slate-500 text-[10px]"></i>`).join(' ') : '';
+            return `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 flex flex-col justify-center items-center text-center"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate w-full">${esc(d.name)}</span><div class="flex gap-1 mt-1">${mH}</div></div>`;
+        }).join('');
+    } else {
+        remSec.classList.add('hidden');
+    }
 }
 
 function initBattlefield() { playTransition(GIFS.BATTLE, 2600, async () => { renderBattlefield(); switchScreen(5); startMatchClock(); try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }); }
@@ -229,9 +247,16 @@ function renderBattlefield() {
 
 function renderCmdrDamageIcons(player) { let html = ''; for (let attackerIdx in player.cmdrDmg) { let dmg = player.cmdrDmg[attackerIdx]; if (dmg > 0 && state.currentMatch[attackerIdx] && !state.currentMatch[attackerIdx].isDead) { html += `<div class="size-8 rounded-full bg-red-900/90 border border-red-500/50 flex items-center justify-center flex-col"><span class="text-[8px] font-bold text-red-200">${esc(state.currentMatch[attackerIdx].player[0].toUpperCase())}</span><span class="text-[12px] font-black text-white">${dmg}</span></div>`; } } return html; }
 
-window.openCmdrModal = function(idx, rotDeg) { const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button aria-label="Decrease" onclick="window.changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button aria-label="Increase" onclick="window.changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold">+</button></div></div>` : '').join(''); document.getElementById('cmdr-modal-box').style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
+// 🐛 BUG 1 CORREGIDO: Se añadió ID "cmdr-val-idx-i" a los números para actualizarlos dinámicamente sin cerrar el modal.
+window.openCmdrModal = function(idx, rotDeg) { 
+    const t = state.currentMatch[idx]; 
+    document.getElementById('cmdr-target-name').innerText = t.player; 
+    document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button aria-label="Decrease" onclick="window.changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold">-</button><span id="cmdr-val-${idx}-${i}" class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button aria-label="Increase" onclick="window.changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold">+</button></div></div>` : '').join(''); 
+    document.getElementById('cmdr-modal-box').style.transform = `rotate(${rotDeg}deg)`; 
+    document.getElementById('cmdr-modal').classList.remove('hidden'); 
+}
 
-// 🐛 BUG 1 CORREGIDO: Ahora el cambio de daño de comandante gatilla la comprobación de eliminación
+// 🐛 BUG 1 CORREGIDO: Ahora inyecta el nuevo valor visualmente de inmediato y ejecuta checkEliminations al llegar a 21
 window.changeCmdrDmg = function(tI, aI, v) { 
     saveUndoState(); 
     let t = state.currentMatch[tI]; 
@@ -241,7 +266,11 @@ window.changeCmdrDmg = function(tI, aI, v) {
     t.life -= (newVal - oldVal); 
     saveData(); 
     renderBattlefield(); 
-    setTimeout(() => checkEliminations(), 50); // Gatillo de muerte por comandante añadido
+    
+    let valNode = document.getElementById(`cmdr-val-${tI}-${aI}`);
+    if (valNode) valNode.innerText = newVal;
+    
+    setTimeout(() => checkEliminations(), 50); 
 }
 
 window.closeCmdrModal = function() { document.getElementById('cmdr-modal').classList.add('hidden'); }
@@ -261,7 +290,7 @@ async function checkEliminations() {
     let alive = state.currentMatch.filter(p => !p.isDead); if (alive.length === 1 && state.currentMatch.length > 1) window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead));
 }
 
-// 🐛 BUG 3 CORREGIDO: Botón AWAKE ahora cambia de color (rojo/verde) y dice simplemente "Awake"
+// 🐛 BUG 3 CORREGIDO: Botón AWAKE cambia de color y siempre dice "Awake"
 window.buildRadialMenu = function() {
     let radial = document.getElementById('radial-menu-overlay'); if (!radial) return;
     radial.querySelectorAll('.radial-btn').forEach(b => b.remove());
@@ -313,7 +342,7 @@ window.rollD20All = function() { window.toggleCenterMenu(); document.getElementB
 window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
 window.goToScreen6Manual = function() { clearInterval(matchInterval); state.matchFinished = false; switchScreen(6); document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div aria-label="Select Winner" onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-bold text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); }
 
-// --- ARQUITECTURA DE DATOS ANALÍTICA ---
+// 🐛 BUG 2 CORREGIDO: Se restauró la caja de "Win Quotes" en la pantalla de la victoria
 window.showUltimateWinner = function(idx) {
     releaseWakeLock(); clearInterval(matchInterval);
     playTransition(GIFS.WINNER, 3200, () => {
@@ -341,9 +370,43 @@ window.showUltimateWinner = function(idx) {
         saveData(); renderHistory();
         saveMatchToGitHub(matchRecord);
         
-        document.getElementById('screen-6').innerHTML = `<div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full"><div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-yellow-400 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)]">emoji_events</span></div><h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${esc(w.player)}</h2><h3 class="text-xl font-bold text-slate-300 mb-8 bg-white/5 px-4 py-1 rounded-full border border-white/10 uppercase">${w.deck ? esc(w.deck.name) : ''}</h3><button onclick="window.startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button></div>`;
+        document.getElementById('screen-6').innerHTML = `
+        <div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full">
+            <div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[100px] text-yellow-400 drop-shadow-[0_0_25px_rgba(250,204,21,0.6)]">emoji_events</span></div>
+            <h2 class="text-5xl font-black text-white uppercase tracking-widest mb-2">${esc(w.player)}</h2>
+            <h3 class="text-xl font-bold text-slate-300 mb-8 bg-white/5 px-4 py-1 rounded-full border border-white/10 uppercase">${w.deck ? esc(w.deck.name) : ''}</h3>
+            <div class="bg-app-surface p-6 rounded-2xl border border-white/5 shadow-lg mb-10 w-full max-w-sm"><p class="text-slate-200 italic text-lg leading-relaxed">"${winQuotes[Math.floor(Math.random() * winQuotes.length)]}"</p></div>
+            <button onclick="window.startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button>
+        </div>`;
         switchScreen(6);
     });
+}
+
+// 🐛 BUG 5 CORREGIDO: Función de sincronización para hacer pull de db.json en GitHub
+window.syncCloudHistory = async function() {
+    try {
+        const btn = document.getElementById('sync-btn-icon');
+        if (btn) btn.classList.add('animate-spin');
+
+        const res = await fetch('https://raw.githubusercontent.com/OatruDev/ManaFox-PRO/main/db.json?t=' + Date.now());
+        if (res.ok) {
+            const data = await res.json();
+            const cloudHistory = Array.isArray(data) ? data : (data.matches || data.history || []);
+            
+            if (cloudHistory.length > 0) {
+                let localMap = new Map(state.history.map(m => [m.id, m]));
+                cloudHistory.forEach(m => localMap.set(m.id, m));
+                state.history = Array.from(localMap.values()).sort((a,b) => new Date(b.date) - new Date(a.date));
+                saveData();
+                renderHistory();
+            }
+        }
+        if (btn) setTimeout(() => btn.classList.remove('animate-spin'), 1000);
+    } catch (e) {
+        console.error("Cloud sync failed", e);
+        const btn = document.getElementById('sync-btn-icon');
+        if (btn) btn.classList.remove('animate-spin');
+    }
 }
 
 window.startOver = function() {
@@ -353,7 +416,7 @@ window.startOver = function() {
     saveData(); switchScreen(1); renderHistory();
 }
 
-// 🐛 BUG 2 & 4 CORREGIDOS: El log ahora extrae la información de los decks directamente desde el snapshot guardado y dibuja los colores.
+// 🐛 BUG 3 CORREGIDO: Los íconos de maná del historial ahora se pintan usando text-slate-500 (estilo B&W)
 function renderHistory() {
     const c = document.getElementById('history-container'); if(!c) return;
     if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); else document.getElementById('history-section').classList.add('hidden');      
@@ -365,10 +428,7 @@ function renderHistory() {
         
         let colorsHtml = '';
         if (wObj && wObj.deck && wObj.deck.colors) {
-            colorsHtml = wObj.deck.colors.map(col => {
-                let manaObj = state.manaColors.find(x => x.id === col);
-                return manaObj ? `<div class="size-4 rounded-full flex items-center justify-center mana-btn ${manaObj.cls} active border border-black/30 shadow-sm" style="font-size:8px;">${manaObj.icon}</div>` : '';
-            }).join('');
+            colorsHtml = wObj.deck.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px] text-slate-500 drop-shadow-sm"></i>`).join(' ');
         }
 
         return `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button aria-label="Delete History" onclick="window.deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 transition-all z-10"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex flex-col mb-1 pr-8"><div class="flex justify-between text-slate-500 uppercase font-bold tracking-tighter"><span>${m.date.split('T')[0]}</span><span class="text-yellow-400">🏆 ${esc(pName)}</span></div><div class="flex justify-between items-center mt-2"><span class="text-[10px] text-slate-300 uppercase truncate font-bold w-32">${esc(dName)}</span><div class="flex gap-1">${colorsHtml}</div></div></div><p class="text-[9px] text-slate-500 mt-1">⏱️ ${m.duration || '00:00'}</p></div>`;
