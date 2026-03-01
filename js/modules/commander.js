@@ -7,9 +7,17 @@ import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme
 let wakeLock = null;
 let matchInterval = null;
 
+// --- FIX VITAL: GESTIÓN DE WAKE LOCK RESTAURADA COMPLETA ---
 async function toggleWakeLock() {
     if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; return false; } 
     else { try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); return true; } } catch (err) { console.error("Wake Lock error:", err); } return false; }
+}
+
+function releaseWakeLock() {
+    if (wakeLock !== null) {
+        try { wakeLock.release(); } catch(e){}
+        wakeLock = null;
+    }
 }
 
 document.addEventListener('visibilitychange', async () => {
@@ -18,7 +26,6 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
-// FIX BUG 2: Reloj integrado en el botón central con soporte dinámico mm:ss / hh:mm:ss
 function startMatchClock() {
     if (matchInterval) clearInterval(matchInterval);
     state.matchStartTime = Date.now();
@@ -50,7 +57,6 @@ export function initCommander() {
 
     if (state.step < 5) renderHistory();
 
-    // Blindaje extra para el botón MANAGE en caso de que el HTML no atrape el evento global
     setTimeout(() => {
         const manageBtn = document.querySelector('[onclick*="openLibraryManager"], #btn-manage');
         if(manageBtn) manageBtn.onclick = window.openLibraryManager;
@@ -101,7 +107,6 @@ function syncDecksToLibrary() {
     if (nw) saveData();
 }
 
-// FIX BUG 1: Forzamos la visualización segura del modal MANAGE
 window.openLibraryManager = function() {
     syncDecksToLibrary(); 
     const modal = document.getElementById('library-modal');
@@ -274,7 +279,6 @@ window.openCmdrModal = function(idx, rotDeg) { currentCmdrTarget = idx; const t 
 window.changeCmdrDmg = function(tI, aI, v) { saveUndoState(); let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); window.openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 50); }
 window.closeCmdrModal = function() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
-// FIX BUG 3: Ejecución inmediata de la victoria tras confirmar la eliminación
 let isCheckingDeath = false;
 async function checkEliminations() { 
     if (isCheckingDeath) return; 
@@ -307,13 +311,13 @@ async function checkEliminations() {
         }  
     } 
 
-    // Al terminar el bucle, si alguien murió, validamos si solo queda uno
-    let alive = state.currentMatch.filter(p => !p.isDead); 
-    if (alive.length === 1 && state.currentMatch.length > 1) { 
-        let winnerIdx = state.currentMatch.findIndex(p => !p.isDead);
-        window.showUltimateWinner(winnerIdx);
+    if (deathOccurred) {
+        let alive = state.currentMatch.filter(p => !p.isDead); 
+        if (alive.length === 1 && state.currentMatch.length > 1) { 
+            let winnerIdx = state.currentMatch.findIndex(p => !p.isDead);
+            window.showUltimateWinner(winnerIdx);
+        } 
     }
-    
     isCheckingDeath = false; 
 }
 
