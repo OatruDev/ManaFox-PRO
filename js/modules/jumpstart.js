@@ -70,7 +70,6 @@ function renderJSSavedPlayers() {
 }
 
 function quickAddJS(n) { for(let i=0; i<state.js.count; i++){ const inp = document.getElementById('p-in-js-'+i); if(inp && !inp.value){ inp.value = n; state.tempPlayerNames[i] = n; break; } } saveData(); }
-
 function getFoxIdByName(name) { let f = state.savedPlayers.find(p => p.name === name); return f ? f.id : null; }
 
 function generateJSSwiss() {
@@ -97,13 +96,23 @@ function generateNextSwissRound() {
 
 function setJSView(view) { state.js.currentView = view; renderJSSwiss(); saveData(); }
 
+// --- FIX: MOTOR DE TIE-BREAKERS A PRUEBA DE BALAS ---
 function assignTieBreakers(sortedPlayers) {
     for(let i = 0; i < sortedPlayers.length; i++) {
         sortedPlayers[i].tieReason = null;
         let tiedWith = sortedPlayers.filter((p, idx) => idx !== i && p.points === sortedPlayers[i].points);
         if (tiedWith.length > 0) {
             let defeatedNames = tiedWith.filter(t => sortedPlayers[i].defeated && sortedPlayers[i].defeated.includes(t.name)).map(t => t.name);
-            if (defeatedNames.length > 0) { sortedPlayers[i].tieReason = `Head-to-Head win vs ${defeatedNames.join(', ')}`; }
+            if (defeatedNames.length > 0) {
+                sortedPlayers[i].tieReason = `H2H Win vs ${defeatedNames.join(', ')}`;
+            } else {
+                let lostToNames = tiedWith.filter(t => t.defeated && t.defeated.includes(sortedPlayers[i].name)).map(t => t.name);
+                if (lostToNames.length > 0) {
+                    sortedPlayers[i].tieReason = `H2H Loss`;
+                } else {
+                    sortedPlayers[i].tieReason = `Tie (Random)`;
+                }
+            }
         }
     }
 }
@@ -119,7 +128,8 @@ function renderJSSwiss() {
         });
         assignTieBreakers(sorted);
         mCont.innerHTML = sorted.map((p, i) => {
-            let tieBadge = p.tieReason ? `<p class="text-[9px] text-app-js uppercase tracking-widest mt-1 font-bold flex items-center gap-1"><span class="material-symbols-outlined text-[10px]">handshake</span> Tie-breaker: ${p.tieReason}</p>` : '';
+            // FIX: Tie Badge visible usando Tailwind nativo text-amber-500
+            let tieBadge = p.tieReason ? `<p class="text-[9px] text-amber-500 uppercase tracking-widest mt-1 font-bold flex items-center gap-1"><span class="material-symbols-outlined text-[10px]">handshake</span> ${p.tieReason}</p>` : '';
             return `<div class="flex justify-between items-center bg-app-surface p-4 rounded-xl border border-white/5 mb-2"><div class="flex flex-col"><div class="flex items-center gap-3"><span class="font-black text-xl ${i===0 ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-500'}">#${i+1}</span><span class="font-bold text-white text-lg">${esc(p.name)}</span></div>${tieBadge}</div><span class="font-black text-app-js text-xl">${p.points} PTS</span></div>`;
         }).join('');
         return;
@@ -184,7 +194,6 @@ function showJSUltimateWinner(sortedPlayers) {
         triggerConfetti(null);
         assignTieBreakers(sortedPlayers);
 
-        // LOG DB COMPLETO DE JUMPSTART
         let podiumLog = sortedPlayers.slice(0,3).map(p => p.name);
         let podiumIds = sortedPlayers.slice(0,3).map(p => p.id);
         
@@ -197,14 +206,15 @@ function showJSUltimateWinner(sortedPlayers) {
             winner_id: w.id,
             podiumLog: podiumLog,
             podium: podiumIds,
-            tie_breaker_used: sortedPlayers.some(p => p.tieReason) ? "Head-to-Head active" : null
+            tie_breaker_used: sortedPlayers.some(p => p.tieReason) ? "Tie-Breakers active" : null
         });
         saveData();
 
         let rankingsHTML = sortedPlayers.map((p,i) => {
             let medal = i===0 ? '🏆' : (i===1 ? '🥈' : (i===2 ? '🥉' : ''));
             let color = i===0 ? 'text-yellow-400' : (i===1 ? 'text-slate-300' : (i===2 ? 'text-amber-600' : 'text-slate-500'));
-            let tieBadge = p.tieReason ? `<span class="text-[8px] text-app-js uppercase font-bold tracking-widest block mt-0.5"><span class="material-symbols-outlined text-[8px] align-middle">handshake</span> ${p.tieReason}</span>` : '';      
+            // FIX: Añadimos la clase text-amber-500 al badge final también para visibilidad
+            let tieBadge = p.tieReason ? `<span class="text-[8px] text-amber-500 uppercase font-bold tracking-widest block mt-0.5"><span class="material-symbols-outlined text-[8px] align-middle">handshake</span> ${p.tieReason}</span>` : '';      
             return `<div class="flex justify-between items-center bg-app-surface-light border border-white/5 p-3 rounded-xl mb-2"><div class="flex flex-col"><span class="font-bold ${color}">${medal} #${i+1} ${esc(p.name)}</span>${tieBadge}</div><span class="text-xs font-black text-app-js">${p.points} PTS</span></div>`;
         }).join('');
         document.getElementById('screen-6').innerHTML = `<div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full"><div class="animate-bounce mb-4"><span class="material-symbols-outlined text-[70px] text-app-js drop-shadow-[0_0_25px_rgba(245,158,11,0.6)]">emoji_events</span></div><h2 class="text-4xl font-black text-white uppercase tracking-widest mb-1">${esc(w.name)}</h2><h3 class="text-[10px] font-bold text-slate-400 mb-6 bg-app-js/20 px-3 py-1 rounded-full border border-app-js/50 uppercase text-app-js tracking-widest">Jumpstart Champion</h3><div class="w-full max-w-sm text-left mb-6"><h4 class="text-[10px] uppercase font-bold text-slate-500 mb-3 tracking-widest">Final Standings</h4>${rankingsHTML}</div><button onclick="window.startOver()" class="w-full max-w-md bg-app-surface-light border border-white/10 text-white font-bold py-5 rounded-2xl text-lg shadow-lg active:scale-95 flex justify-center items-center gap-2"><span class="material-symbols-outlined">exit_to_app</span> Return Home</button></div>`;
