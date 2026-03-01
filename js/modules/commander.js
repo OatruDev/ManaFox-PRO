@@ -23,15 +23,23 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
+// --- FIX: RELOJ INTEGRADO EN EL BOTÓN CENTRAL ---
 function startMatchClock() {
     if (matchInterval) clearInterval(matchInterval);
     state.matchStartTime = Date.now();
     state.matchDurationSeconds = 0;
+    
     matchInterval = setInterval(() => {
         if (state.step === 5 && !state.matchFinished) {
             state.matchDurationSeconds++;
-            const clockEl = document.getElementById('match-clock-display');
-            if (clockEl) clockEl.innerText = formatTime(state.matchDurationSeconds);
+            const icon = document.getElementById('center-menu-icon');
+            // Si el menú no está abierto, el botón muestra la hora
+            if (icon && !menuOpen) {
+                icon.innerText = formatTimeISO(state.matchDurationSeconds);
+                icon.style.fontFamily = 'monospace';
+                icon.style.fontSize = '16px';
+                icon.style.fontWeight = '900';
+            }
         }
     }, 1000);
 }
@@ -61,7 +69,9 @@ function goToDecks() {
 
 function buildDeckDOM() {
     const c = document.getElementById('deck-inputs-container'); c.innerHTML = '';
-    const lib = [...baseDecks, ...state.savedDecks];
+    // FIX: Evitar duplicados. state.savedDecks ya contiene los baseDecks.
+    const lib = state.savedDecks;
+    
     state.deckData.forEach((d, i) => {
         const archName = getArchetype(d.colors);
         const colorsHTML = state.manaColors.map(m => `<button onclick="window.toggleColor(${i},'${m.id}')" class="size-10 rounded-full flex items-center justify-center mana-btn ${m.cls} ${d.colors.includes(m.id) ? 'active' : 'opacity-30'}">${m.icon}</button>`).join('');
@@ -70,13 +80,13 @@ function buildDeckDOM() {
 }
 
 window.updateDeckName = function(i, val) { state.deckData[i].name = val; saveData(); }
-function loadDeck(di, li) { const d = [...baseDecks, ...state.savedDecks][li]; state.deckData[di] = { id: d.id, name: d.name, colors: [...d.colors] }; buildDeckDOM(); saveData(); }
+function loadDeck(di, li) { const d = state.savedDecks[li]; state.deckData[di] = { id: d.id, name: d.name, colors: [...d.colors] }; buildDeckDOM(); saveData(); }
 function toggleColor(di, mi) { const d = state.deckData[di]; d.colors = d.colors.includes(mi) ? d.colors.filter(c => c !== mi) : [...d.colors, mi]; buildDeckDOM(); saveData(); }
 function removeDeck(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
 function addExtraDeck() { state.decks++; state.deckData.push({ name: '', colors: [] }); buildDeckDOM(); saveData(); }
 
 function syncDecksToLibrary() {
-    let allE = [...baseDecks, ...state.savedDecks]; let nw = false;
+    let allE = state.savedDecks; let nw = false;
     state.deckData.forEach((d, i) => {
         const inputNode = document.getElementById(`deck-input-${i}`);
         if (inputNode && inputNode.value !== undefined) { d.name = inputNode.value.trim(); }
@@ -86,7 +96,6 @@ function syncDecksToLibrary() {
                 let newId = generateDeckID();
                 d.id = newId;
                 state.savedDecks.push({ id: newId, name: d.name, colors: [...d.colors] });  
-                allE.push({ id: newId, name: d.name, colors: [...d.colors] });
                 nw = true;
             }
         }
@@ -181,7 +190,6 @@ function executeAssignment() {
     for (let i = 0; i < state.players; i++) {
         let pN = state.tempPlayerNames[i] || `Player ${i+1}`;
         let mDeck = tempMatch[i] ? tempMatch[i].deck : null;
-        // Asignación final con FOX-ID
         let foxObj = state.savedPlayers.find(p => p.name.toLowerCase() === pN.toLowerCase());
         let pId = foxObj ? foxObj.id : generatePlayerID();
 
@@ -191,6 +199,8 @@ function executeAssignment() {
 }
 
 function reassignDecks() { executeAssignment(); }
+window.reassignDecks = reassignDecks; // FIX BUG 3
+
 function buildResultsDOM() {
     const c = document.getElementById('assignments-container'); c.innerHTML = '';
     state.currentMatch.forEach(m => {
@@ -207,10 +217,28 @@ function buildResultsDOM() {
 function initBattlefield() { playTransition(GIFS.BATTLE, 2600, async () => { renderBattlefield(); switchScreen(5); startMatchClock(); try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }); }
 function saveUndoState() { if (!state.undoStack) state.undoStack = []; state.undoStack.push(JSON.parse(JSON.stringify(state.currentMatch))); if (state.undoStack.length > 20) state.undoStack.shift(); }
 window.undoLastAction = function() { if (menuOpen) window.toggleCenterMenu(); if (!state.undoStack || state.undoStack.length === 0) return mfModal.show("Undo", "No previous actions available.", "info"); state.currentMatch = state.undoStack.pop(); saveData(); renderBattlefield(); }
-let holdTimer = null; let holdInterval = null; let eliminationTimer = null;      
-function handleTapStart(e, idx, amt) { if (e && e.cancelable) e.preventDefault(); if (state.currentMatch[idx].isDead) return; saveUndoState(); clearTimeout(holdTimer); clearInterval(holdInterval); changeLife(idx, amt); holdTimer = setTimeout(() => { holdInterval = setInterval(() => { changeLife(idx, amt * 5); }, 150); }, 400); }
-function handleTapEnd(e) { if (e && e.cancelable) e.preventDefault(); clearTimeout(holdTimer); clearInterval(holdInterval); }
-function changeLife(idx, amt) { if (state.currentMatch[idx].isDead) return; state.currentMatch[idx].life += amt; const displayNode = document.getElementById(`life-display-${idx}`); if (displayNode) displayNode.innerText = state.currentMatch[idx].life;        saveData(); clearTimeout(eliminationTimer); eliminationTimer = setTimeout(() => checkEliminations(), 300); }
+
+let holdTimer = null; let holdInterval = null; 
+function handleTapStart(e, idx, amt) { 
+    if (e && e.cancelable) e.preventDefault(); 
+    if (state.currentMatch[idx].isDead) return; 
+    saveUndoState(); clearTimeout(holdTimer); clearInterval(holdInterval); 
+    changeLife(idx, amt); 
+    holdTimer = setTimeout(() => { holdInterval = setInterval(() => { changeLife(idx, amt * 5); }, 150); }, 400); 
+}
+function handleTapEnd(e) { 
+    if (e && e.cancelable) e.preventDefault(); 
+    clearTimeout(holdTimer); clearInterval(holdInterval); 
+    // FIX BUG 7: Forzamos la comprobación de victoria al levantar el dedo
+    setTimeout(() => checkEliminations(), 50);
+}
+function changeLife(idx, amt) { 
+    if (state.currentMatch[idx].isDead) return; 
+    state.currentMatch[idx].life += amt; 
+    const displayNode = document.getElementById(`life-display-${idx}`); 
+    if (displayNode) displayNode.innerText = state.currentMatch[idx].life;        
+    saveData(); 
+}
 
 function renderBattlefield() {
     const grid = document.getElementById('battlefield-grid'); const count = state.currentMatch.length;
@@ -220,8 +248,7 @@ function renderBattlefield() {
     if (count === 4) { if (layoutBtn) layoutBtn.classList.remove('hidden'); if (state.layoutMode === 'cross') grid.classList.replace('bf-4p-grid', 'bf-4p-cross'); } else { if (layoutBtn) layoutBtn.classList.add('hidden'); }
     grid.innerHTML = '';
 
-    // Menú Central Info (Clock)
-    grid.innerHTML += `<div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[80] pointer-events-none mt-[-50px]"><div class="bg-black/80 px-3 py-1 rounded-full border border-white/20 backdrop-blur-md"><span id="match-clock-display" class="text-[11px] font-black font-mono text-app-primary tracking-widest">${formatTime(state.matchDurationSeconds)}</span></div></div>`;
+    // ELIMINADO EL DIV MORADO FLOTANTE DE AQUI
 
     state.currentMatch.forEach((p, i) => {
         let rotDeg = 0; let pos = '';
@@ -235,10 +262,10 @@ function renderBattlefield() {
         grid.innerHTML += `<div class="relative w-full h-full flex flex-col justify-center items-center ${pos} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}"><div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}"><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox1})" ontouchstart="handleTapStart(event, ${i}, ${hitbox1})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox1 === '1' ? '+' : '-'}</span></div><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox2})" ontouchstart="handleTapStart(event, ${i}, ${hitbox2})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox2 === '1' ? '+' : '-'}</span></div></div><div class="absolute inset-0 m-auto z-20 pointer-events-none flex flex-col justify-between transition-opacity ${p.isDead ? 'opacity-20' : ''}" style="width: ${innerW}; height: ${innerH}; transform: rotate(${rotDeg}deg);"><div class="flex-1 flex flex-col justify-center items-center w-full text-center"><h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate w-full px-2">${esc(p.player)}</h3>   <p class="text-[12px] sm:text-sm font-bold text-white/90 truncate mb-1 w-full px-2">${p.deck ? esc(p.deck.name) : ''}</p>${lifeUI}</div><div class="w-full px-4 pb-4 flex justify-between items-end ${p.isDead ? 'hidden' : ''}"><div class="flex gap-2 flex-wrap pointer-events-auto">${renderCmdrDamageIcons(p)}</div><button onclick="window.openCmdrModal(${i}, ${rotDeg})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto shadow-lg active:scale-95 transition-transform backdrop-blur-sm shrink-0"><span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span></button></div></div>${deadOverlay}</div>`;
     });
 
-    // Inyectar Botón Wake Lock en el menú Radial
+    // FIX: INYECTAR WAKE LOCK DE FORMA SEGURA (Sin borrar Onclicks nativos)
     const radial = document.getElementById('radial-menu-overlay');
     if(radial && !document.getElementById('wake-lock-btn')) {
-        radial.innerHTML += `<button onclick="event.stopPropagation(); window.handleWakeLockToggle()" id="wake-lock-btn" class="radial-btn" style="border-color: rgba(239,68,68,0.4); color: #ef4444;"><span class="material-symbols-outlined">flare</span><span class="lbl">Keep On</span></button>`;
+        radial.insertAdjacentHTML('beforeend', `<button onclick="event.stopPropagation(); window.handleWakeLockToggle()" id="wake-lock-btn" class="radial-btn" style="border-color: rgba(239,68,68,0.4); color: #ef4444;"><span class="material-symbols-outlined">flare</span><span class="lbl">Keep On</span></button>`);
     }
 }
 
@@ -246,12 +273,16 @@ function renderCmdrDamageIcons(player) { let html = ''; for (let attackerIdx in 
 window.toggleLayout = function() { state.layoutMode = state.layoutMode === 'grid' ? 'cross' : 'grid'; renderBattlefield(); window.toggleCenterMenu(); saveData(); }
 let currentCmdrTarget = -1;
 window.openCmdrModal = function(idx, rotDeg) { currentCmdrTarget = idx; const t = state.currentMatch[idx]; document.getElementById('cmdr-target-name').innerText = t.player; document.getElementById('cmdr-options').innerHTML = state.currentMatch.map((a, i) => i !== idx && !a.isDead ? `<div class="flex justify-between items-center bg-app-surface-light p-3 rounded-xl border border-white/5"><span class="font-bold text-sm truncate w-24">${esc(a.player)}</span><div class="flex items-center gap-4"><button onclick="window.changeCmdrDmg(${idx},${i},-1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">-</button><span class="text-2xl font-black w-8 text-center text-red-400">${t.cmdrDmg[i] || 0}</span><button onclick="window.changeCmdrDmg(${idx},${i},1)" class="size-10 bg-white/5 rounded-lg flex items-center justify-center text-2xl font-bold active:scale-95">+</button></div></div>` : '').join(''); const box = document.getElementById('cmdr-modal-box'); box.style.transform = `rotate(${rotDeg}deg)`; document.getElementById('cmdr-modal').classList.remove('hidden'); }
-window.changeCmdrDmg = function(tI, aI, v) { saveUndoState(); let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); window.openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 20); }
+window.changeCmdrDmg = function(tI, aI, v) { saveUndoState(); let t = state.currentMatch[tI]; let oldVal = t.cmdrDmg[aI] || 0; let newVal = Math.max(0, oldVal + v); t.cmdrDmg[aI] = newVal; t.life -= (newVal - oldVal); saveData(); window.openCmdrModal(tI, document.getElementById('cmdr-modal-box').style.transform.replace(/[^0-9\-]/g, '') || 0); renderBattlefield(); setTimeout(() => checkEliminations(), 50); }
 window.closeCmdrModal = function() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
+// --- FIX BUG 7: LÓGICA DE MUERTE A PRUEBA DE BALAS ---
 let isCheckingDeath = false;
 async function checkEliminations() { 
-    if (isCheckingDeath) return; isCheckingDeath = true; 
+    if (isCheckingDeath) return; 
+    isCheckingDeath = true; 
+    let deathOccurred = false;
+
     for (let i = 0; i < state.currentMatch.length; i++) { 
         let p = state.currentMatch[i]; 
         if (!p.isDead) { 
@@ -260,14 +291,15 @@ async function checkEliminations() {
                 for(let k in p.cmdrDmg) { if(p.cmdrDmg[k] >= 21) { cmdrDeath = true; killerIdx = k; break; } }
             } 
             if (p.life <= 0 || cmdrDeath) { 
-                let reason = cmdrDeath ? "21 Commander Damage (Single Source)" : "0 Life"; 
+                let reason = cmdrDeath ? "21 Commander Damage" : "0 Life"; 
                 let isEliminated = await mfModal.show("Confirm Elimination", `${esc(p.player)} reached ${reason}.`, "skull", "confirm"); 
                 if (isEliminated) { 
                     p.isDead = true; 
                     p.deathCause = cmdrDeath ? "cmdr_dmg" : "life_loss";
-                    p.killerId = cmdrDeath ? state.currentMatch[killerIdx].id : null;
+                    p.killerId = (cmdrDeath && state.currentMatch[killerIdx]) ? state.currentMatch[killerIdx].id : null;
                     p.timeOfDeath = formatTimeISO(state.matchDurationSeconds);
                     p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)]; 
+                    deathOccurred = true;
                     if (currentCmdrTarget === i) window.closeCmdrModal();        
                 } else { 
                     if (cmdrDeath) { for (let k in p.cmdrDmg) if (p.cmdrDmg[k] >= 21) p.cmdrDmg[k] = 20; } else if (p.life <= 0) { p.life = 1; } 
@@ -276,8 +308,13 @@ async function checkEliminations() {
             } 
         }  
     } 
-    let alive = state.currentMatch.filter(p => !p.isDead); 
-    if (alive.length === 1 && state.currentMatch.length > 1) { setTimeout(() => { window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1200); } 
+
+    if (deathOccurred) {
+        let alive = state.currentMatch.filter(p => !p.isDead); 
+        if (alive.length === 1 && state.currentMatch.length > 1) { 
+            setTimeout(() => { window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead)); }, 1000); 
+        } 
+    }
     isCheckingDeath = false; 
 }
 
@@ -286,8 +323,25 @@ window.toggleCenterMenu = function() {
     menuOpen = !menuOpen;
     const menu = document.getElementById('radial-menu-overlay'); const icon = document.getElementById('center-menu-icon');
     if (menu) {
-        if(menuOpen) { menu.classList.add('active'); icon.innerText = 'close'; icon.classList.add('rotate-90'); const btns = Array.from(menu.querySelectorAll('.radial-btn:not(.hidden)')); const R = 95; const startAngle = -Math.PI / 2; const angleStep = (Math.PI * 2) / btns.length; btns.forEach((btn, index) => { const angle = startAngle + index * angleStep; const x = Math.round(Math.cos(angle) * R); const y = Math.round(Math.sin(angle) * R); btn.style.transform = `translate(${x}px, ${y}px) scale(1)`;       btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.style.transitionDelay = `${index * 0.05}s`; }); }
-        else { menu.classList.remove('active'); icon.innerText = 'apps'; icon.classList.remove('rotate-90'); const btns = Array.from(menu.querySelectorAll('.radial-btn'));        btns.forEach(btn => { btn.style.transform = `translate(0px, 0px) scale(0.3)`; btn.style.opacity = '0'; btn.style.pointerEvents = 'none'; btn.style.transitionDelay = '0s'; }); }
+        if(menuOpen) { 
+            menu.classList.add('active'); 
+            icon.innerText = 'close'; icon.classList.add('rotate-90');
+            icon.style.fontFamily = 'Material Symbols Outlined'; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal';
+            
+            const btns = Array.from(menu.querySelectorAll('.radial-btn:not(.hidden)')); const R = 95; const startAngle = -Math.PI / 2; const angleStep = (Math.PI * 2) / btns.length; 
+            btns.forEach((btn, index) => { const angle = startAngle + index * angleStep; const x = Math.round(Math.cos(angle) * R); const y = Math.round(Math.sin(angle) * R); btn.style.transform = `translate(${x}px, ${y}px) scale(1)`;       btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.style.transitionDelay = `${index * 0.05}s`; }); 
+        } else { 
+            menu.classList.remove('active'); 
+            icon.classList.remove('rotate-90');
+            // Restaura el reloj en el botón central si se está jugando
+            if (state.step === 5) {
+                icon.innerText = formatTimeISO(state.matchDurationSeconds);
+                icon.style.fontFamily = 'monospace'; icon.style.fontSize = '16px'; icon.style.fontWeight = '900';
+            } else {
+                icon.innerText = 'apps';
+            }
+            const btns = Array.from(menu.querySelectorAll('.radial-btn'));        btns.forEach(btn => { btn.style.transform = `translate(0px, 0px) scale(0.3)`; btn.style.opacity = '0'; btn.style.pointerEvents = 'none'; btn.style.transitionDelay = '0s'; }); 
+        }
     }
 }
 
@@ -310,7 +364,6 @@ window.showUltimateWinner = function(idx) {
         state.matchFinished = true; const w = state.currentMatch[idx]; const quote = winQuotes[Math.floor(Math.random() * winQuotes.length)];
         triggerConfetti(w.deck ? w.deck.colors : []);
         
-        // CONSTRUCCIÓN DEL LOG COMPLETO (Estructura para DB)
         let participantsLog = state.currentMatch.map(p => ({
             player_id: p.id,
             deck_id: p.deck ? p.deck.id : null,
@@ -342,6 +395,7 @@ window.startOver = function() {
     state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.js.rounds = []; state.js.currentRound = 0; state.undoStack = []; state.matchDurationSeconds = 0;      
     state.playerBans = []; state.playerLocks = [];
     state.step = state.gameMode === 'commander' ? 1 : 7;
+    const icon = document.getElementById('center-menu-icon'); if(icon) { icon.innerText = 'apps'; icon.style.fontFamily = 'Material Symbols Outlined'; icon.style.fontSize = '30px'; icon.style.fontWeight = 'normal'; }
     saveData(); switchScreen(state.step); if(state.gameMode === 'commander') renderHistory();
 }
 
@@ -352,7 +406,7 @@ function renderHistory() {
 }
 window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete Match?", "This action will remove the match from the history.", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
 
-window.updateCount = updateCount; window.applyDandLPreset = applyDandLPreset; window.applyDJLPreset = applyDJLPreset; window.openLibraryManager = openLibraryManager; window.closeLibraryManager = closeLibraryManager; window.addExtraDeck = addExtraDeck; window.loadDeck = loadDeck; window.toggleColor = toggleColor; window.removeDeck = removeDeck; window.addExtraPlayer = addExtraPlayer; window.removePlayer = removePlayer; window.quickAdd = quickAdd; window.deleteSavedPlayer = deleteSavedPlayer; window.setPlayerLock = setPlayerLock; window.toggleBan = toggleBan; window.reassignDecks = reassignDecks; window.handleTapStart = handleTapStart; window.handleTapEnd = handleTapEnd;
+window.updateCount = updateCount; window.applyDandLPreset = applyDandLPreset; window.applyDJLPreset = applyDJLPreset; window.openLibraryManager = openLibraryManager; window.closeLibraryManager = closeLibraryManager; window.addExtraDeck = addExtraDeck; window.loadDeck = loadDeck; window.toggleColor = toggleColor; window.removeDeck = removeDeck; window.addExtraPlayer = addExtraPlayer; window.removePlayer = removePlayer; window.quickAdd = quickAdd; window.deleteSavedPlayer = deleteSavedPlayer; window.setPlayerLock = setPlayerLock; window.toggleBan = toggleBan; window.handleTapStart = handleTapStart; window.handleTapEnd = handleTapEnd;
 
 export function handleCommanderNext() {
     if (state.step === 1) { state.playerLocks = []; state.playerBans = []; goToDecks(); } 

@@ -49,6 +49,15 @@ main { flex: 1 0 auto; }
 
 .bf-grid { display: grid; width: 100vw; height: 100svh; gap: 4px; background: #000000; position: fixed; inset: 0; z-index: 40; }
 
+/* --- FIX: RESTAURACIÓN DE FONDOS DE COLOR (LIQUID BG) --- */
+.bg-texture { background-size: cover; background-position: center; }
+.liquid-bg {
+    background: linear-gradient(135deg, var(--c1, #18181b), var(--c2, #000000), var(--c3, #18181b), var(--c4, #000000));
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+}
+@keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
 .h2h-badge {
     background: rgba(139, 92, 246, 0.2);
     border: 1px solid rgba(139, 92, 246, 0.4);
