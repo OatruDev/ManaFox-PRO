@@ -7,6 +7,7 @@ import { GIFS, baseDecks, winQuotes, loseQuotes, triggerConfetti, getPlayerTheme
 let wakeLock = null;
 let matchInterval = null;
 
+// --- GESTIÓN DE PANTALLA ENCENDIDA ---
 async function toggleWakeLock() {
     if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; return false; } 
     else { try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); return true; } } catch (err) { console.error("Wake Lock error:", err); } return false; }
@@ -20,6 +21,7 @@ document.addEventListener('visibilitychange', async () => {
     if (wakeLock !== null && document.visibilityState === 'visible' && state.step === 5) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }
 });
 
+// --- MOTOR DEL RELOJ DE PARTIDA ---
 function startMatchClock() {
     if (matchInterval) clearInterval(matchInterval);
     state.matchStartTime = Date.now();
@@ -165,49 +167,59 @@ function renderBattlefield() {
     const grid = document.getElementById('battlefield-grid'); const count = state.currentMatch.length;
     grid.className = 'bf-grid';
     
-    // FIX: Aplicación precisa de layouts en el HTML
     if (count === 2) grid.classList.add('bf-2p'); 
     else if (count === 3) grid.classList.add('bf-3p'); 
-    else if (count === 4) grid.classList.add('bf-4p-grid'); 
+    else if (count === 4) {
+        if (state.layoutMode === 'cross') { grid.classList.remove('bf-grid'); grid.classList.add('bf-4p-cross'); }
+        else grid.classList.add('bf-4p-grid');
+    }
     else if (count === 5) grid.classList.add('bf-5p'); 
     else grid.classList.add('bf-6p');  
     
     let layoutBtn = document.getElementById('layout-toggle-btn');
-    if (count === 4) { 
-        if (layoutBtn) layoutBtn.classList.remove('hidden'); 
-        if (state.layoutMode === 'cross') {
-            grid.classList.remove('bf-grid', 'bf-4p-grid');
-            grid.classList.add('bf-4p-cross');
-        } 
-    } else { 
-        if (layoutBtn) layoutBtn.classList.add('hidden'); 
-    }
+    if (count === 4) { if (layoutBtn) layoutBtn.classList.remove('hidden'); } else { if (layoutBtn) layoutBtn.classList.add('hidden'); }
     
     grid.innerHTML = '';
 
     state.currentMatch.forEach((p, i) => {
         let rotDeg = 0; let posClass = '';
         
-        // FIX: Ángulos de 3 jugadores como pedías (top 2 facing down)
         if (count === 4 && state.layoutMode === 'cross') { 
-            if (i === 0) { posClass = 'absolute top-0 left-0 w-full h-[25svh]'; rotDeg = 180; } 
-            if (i === 1) { posClass = 'absolute top-[25svh] right-0 w-[50vw] h-[50svh]'; rotDeg = 90; } 
-            if (i === 2) { posClass = 'absolute top-[25svh] left-0 w-[50vw] h-[50svh]'; rotDeg = -90; } 
-            if (i === 3) { posClass = 'absolute bottom-0 left-0 w-full h-[25svh]'; rotDeg = 0; } 
+            posClass = `cross-pos-${i}`;
+            if (i === 0) rotDeg = 180; if (i === 1) rotDeg = 90; if (i === 2) rotDeg = -90; if (i === 3) rotDeg = 0; 
         } else { 
             if (count === 2 && i === 0) rotDeg = 180; 
-            if (count === 3 && (i === 0 || i === 1)) rotDeg = 180; 
+            if (count === 3 && i === 0) { rotDeg = 180; posClass = 'bf-3p-top'; } 
             if (count >= 4 && (i === 0 || i === 1)) rotDeg = 180; 
             if (count === 6 && i === 2) rotDeg = 180; 
         }
 
         let flexDir = 'flex-col'; let hitbox1 = '1'; let hitbox2 = '-1';
         if (rotDeg === 0) { flexDir = 'flex-col'; hitbox1 = '1'; hitbox2 = '-1'; } else if (rotDeg === 180) { flexDir = 'flex-col'; hitbox1 = '-1'; hitbox2 = '1'; } else if (rotDeg === 90) { flexDir = 'flex-row'; hitbox1 = '-1'; hitbox2 = '1'; } else if (rotDeg === -90) { flexDir = 'flex-row'; hitbox1 = '1'; hitbox2 = '-1'; }
+        
         let innerW = '100%'; let innerH = '100%';
         if (count === 4 && state.layoutMode === 'cross' && (rotDeg === 90 || rotDeg === -90)) { innerW = '40svh'; innerH = '50vw'; }
+        
         let deadOverlay = p.isDead ? `<div class="absolute inset-0 bg-zinc-950/85 backdrop-grayscale z-30 flex flex-col items-center justify-center pointer-events-auto transition-all duration-500" style="transform: rotate(${rotDeg}deg)"><span class="material-symbols-outlined text-[24vmin] text-[#1e83f5] drop-shadow-[0_0_35px_rgba(30,131,245,0.8)]">skull</span><div class="mt-4 px-6 py-2 bg-[#1e83f5]/20 border border-[#1e83f5] text-white text-xs font-black tracking-widest uppercase rounded-full shadow-[0_0_15px_rgba(30,131,245,0.5)]">Eliminated</div><p class="text-slate-300 font-medium italic mt-4 text-center px-8 text-sm drop-shadow-md">"${esc(p.deathQuote)}"</p></div>` : '';
         let lifeUI = p.isDead ? '' : `<span id="life-display-${i}" class="text-[clamp(4rem,12vh,9rem)] font-black tracking-tighter leading-none text-white">${p.life}</span>`;
-        grid.innerHTML += `<div class="relative w-full h-full flex flex-col justify-center items-center ${posClass} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}"><div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}"><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox1})" ontouchstart="handleTapStart(event, ${i}, ${hitbox1})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox1 === '1' ? '+' : '-'}</span></div><div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox2})" ontouchstart="handleTapStart(event, ${i}, ${hitbox2})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox2 === '1' ? '+' : '-'}</span></div></div><div class="absolute inset-0 m-auto z-20 pointer-events-none flex flex-col justify-between transition-opacity ${p.isDead ? 'opacity-20' : ''}" style="width: ${innerW}; height: ${innerH}; transform: rotate(${rotDeg}deg);"><div class="flex-1 flex flex-col justify-center items-center w-full text-center"><h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate w-full px-2">${esc(p.player)}</h3>   <p class="text-[12px] sm:text-sm font-bold text-white/90 truncate mb-1 w-full px-2">${p.deck ? esc(p.deck.name) : ''}</p>${lifeUI}</div><div class="w-full px-4 pb-4 flex justify-between items-end ${p.isDead ? 'hidden' : ''}"><div class="flex gap-2 flex-wrap pointer-events-auto">${renderCmdrDamageIcons(p)}</div><button onclick="window.openCmdrModal(${i}, ${rotDeg})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto shadow-lg active:scale-95 transition-transform backdrop-blur-sm shrink-0"><span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span></button></div></div>${deadOverlay}</div>`;
+        
+        grid.innerHTML += `
+        <div class="relative w-full h-full flex flex-col justify-center items-center ${posClass} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}">
+            <div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}">
+                <div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox1})" ontouchstart="handleTapStart(event, ${i}, ${hitbox1})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox1 === '1' ? '+' : '-'}</span></div>
+                <div class="flex-1 w-full h-full cursor-pointer flex items-center justify-center group active:bg-white/10 transition-colors" onmousedown="handleTapStart(event, ${i}, ${hitbox2})" ontouchstart="handleTapStart(event, ${i}, ${hitbox2})" onmouseup="handleTapEnd(event)" onmouseleave="handleTapEnd(event)" ontouchend="handleTapEnd(event)" ontouchcancel="handleTapEnd(event)"><span class="text-white opacity-10 text-[10vmin] font-black select-none pointer-events-none" style="transform: rotate(${rotDeg}deg)">${hitbox2 === '1' ? '+' : '-'}</span></div>
+            </div>
+            <div class="absolute inset-0 m-auto z-20 pointer-events-none flex flex-col justify-between transition-opacity ${p.isDead ? 'opacity-20' : ''}" style="width: ${innerW}; height: ${innerH}; transform: rotate(${rotDeg}deg);">
+                <div class="flex-1 flex flex-col justify-center items-center w-full text-center">
+                    <h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate w-full px-2">${esc(p.player)}</h3>   
+                    <p class="text-[12px] sm:text-sm font-bold text-white/90 truncate mb-1 w-full px-2">${p.deck ? esc(p.deck.name) : ''}</p>${lifeUI}
+                </div>
+                <div class="w-full px-4 pb-4 flex justify-between items-end ${p.isDead ? 'hidden' : ''}">
+                    <div class="flex gap-2 flex-wrap pointer-events-auto">${renderCmdrDamageIcons(p)}</div>
+                    <button onclick="window.openCmdrModal(${i}, ${rotDeg})" class="size-10 sm:size-14 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white pointer-events-auto shadow-lg active:scale-95 transition-transform backdrop-blur-sm shrink-0"><span class="material-symbols-outlined text-[20px] sm:text-[28px]">swords</span></button>
+                </div>
+            </div>${deadOverlay}
+        </div>`;
     });
 
     const radial = document.getElementById('radial-menu-overlay');
@@ -328,7 +340,12 @@ export function handleCommanderNext() {
         savePlayerInputs(); let nwP = false;
         for (let i = 0; i < state.players; i++) {
             let v = state.tempPlayerNames[i] || 'Player ' + (i + 1); state.tempPlayerNames[i] = v;
-            if (v && v !== 'Player ' + (i + 1) && !state.savedPlayers.some(p => p.name.toLowerCase() === v.toLowerCase())) { state.savedPlayers.push({ id: generatePlayerID(), name: v, addedAt: Date.now() }); nwP = true; } 
+            if (v && v !== 'Player ' + (i + 1) && !state.savedPlayers.some(p => p.name.toLowerCase() === v.toLowerCase())) { 
+                // REGLA MAESTRA DANIEL FOX-00001
+                let newId = v.toLowerCase() === 'daniel' ? 'FOX-00001' : generatePlayerID();
+                state.savedPlayers.push({ id: newId, name: v, addedAt: Date.now() }); 
+                nwP = true; 
+            } 
         }
         if (nwP) saveData(); executeAssignment();
     }

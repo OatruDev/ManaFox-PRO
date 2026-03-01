@@ -96,7 +96,6 @@ function generateNextSwissRound() {
 
 function setJSView(view) { state.js.currentView = view; renderJSSwiss(); saveData(); }
 
-// --- FIX: MOTOR DE TIE-BREAKERS A PRUEBA DE BALAS ---
 function assignTieBreakers(sortedPlayers) {
     for(let i = 0; i < sortedPlayers.length; i++) {
         sortedPlayers[i].tieReason = null;
@@ -108,9 +107,9 @@ function assignTieBreakers(sortedPlayers) {
             } else {
                 let lostToNames = tiedWith.filter(t => t.defeated && t.defeated.includes(sortedPlayers[i].name)).map(t => t.name);
                 if (lostToNames.length > 0) {
-                    sortedPlayers[i].tieReason = `H2H Loss`;
+                    sortedPlayers[i].tieReason = `H2H Loss vs ${lostToNames[0]}`;
                 } else {
-                    sortedPlayers[i].tieReason = `Tie (Random)`;
+                    sortedPlayers[i].tieReason = `Tie (No Match)`;
                 }
             }
         }
@@ -128,7 +127,6 @@ function renderJSSwiss() {
         });
         assignTieBreakers(sorted);
         mCont.innerHTML = sorted.map((p, i) => {
-            // FIX: Tie Badge visible usando Tailwind nativo text-amber-500
             let tieBadge = p.tieReason ? `<p class="text-[9px] text-amber-500 uppercase tracking-widest mt-1 font-bold flex items-center gap-1"><span class="material-symbols-outlined text-[10px]">handshake</span> ${p.tieReason}</p>` : '';
             return `<div class="flex justify-between items-center bg-app-surface p-4 rounded-xl border border-white/5 mb-2"><div class="flex flex-col"><div class="flex items-center gap-3"><span class="font-black text-xl ${i===0 ? 'text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'text-slate-500'}">#${i+1}</span><span class="font-bold text-white text-lg">${esc(p.name)}</span></div>${tieBadge}</div><span class="font-black text-app-js text-xl">${p.points} PTS</span></div>`;
         }).join('');
@@ -213,7 +211,6 @@ function showJSUltimateWinner(sortedPlayers) {
         let rankingsHTML = sortedPlayers.map((p,i) => {
             let medal = i===0 ? '🏆' : (i===1 ? '🥈' : (i===2 ? '🥉' : ''));
             let color = i===0 ? 'text-yellow-400' : (i===1 ? 'text-slate-300' : (i===2 ? 'text-amber-600' : 'text-slate-500'));
-            // FIX: Añadimos la clase text-amber-500 al badge final también para visibilidad
             let tieBadge = p.tieReason ? `<span class="text-[8px] text-amber-500 uppercase font-bold tracking-widest block mt-0.5"><span class="material-symbols-outlined text-[8px] align-middle">handshake</span> ${p.tieReason}</span>` : '';      
             return `<div class="flex justify-between items-center bg-app-surface-light border border-white/5 p-3 rounded-xl mb-2"><div class="flex flex-col"><span class="font-bold ${color}">${medal} #${i+1} ${esc(p.name)}</span>${tieBadge}</div><span class="text-xs font-black text-app-js">${p.points} PTS</span></div>`;
         }).join('');
