@@ -11,9 +11,9 @@ export async function saveMatchToGitHub(matchData) {
         });
 
         if (!response.ok) {
-            // Cazamos la respuesta del servidor para imprimir el error exacto
             const errData = await response.json().catch(() => ({}));
-            throw new Error(`Bouncer crashed: ${errData.error || response.statusText}`);
+            // Aquí está la magia: ahora imprimirá los DETALLES exactos
+            throw new Error(`Bouncer crashed: ${errData.error}. Details: ${errData.details || 'None'}`);
         }
         
         console.log("✅ [DB] Match successfully immortalized via Serverless Proxy!");
