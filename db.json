@@ -1,0 +1,110 @@
+[
+  {
+    "id": "MTC-SAODE",
+    "date": "2026-03-01T06:43:14.744Z",
+    "date_display": "1/3/2026 07:43",
+    "mode": "commander",
+    "duration": "00:00:17",
+    "winner_id": "FOX-00001",
+    "winner": "Daniel",
+    "pairings": [
+      {
+        "id": "FOX-00001",
+        "player": "Daniel",
+        "deck": {
+          "id": "DCK-0000006",
+          "name": "Eldrazi Incursion (Ulalek)",
+          "colors": [
+            "W",
+            "U",
+            "B",
+            "R",
+            "G"
+          ],
+          "origIdx": 5
+        },
+        "life": 40,
+        "cmdrDmg": {},
+        "isDead": false,
+        "deathCause": null,
+        "killerId": null,
+        "timeOfDeath": null,
+        "themeVars": "--c1: rgba(250, 204, 21, 0.9); --c2: rgba(59, 130, 246, 0.9); --c3: rgba(124, 58, 237, 0.9); --c4: rgba(250, 204, 21, 0.9);",
+        "deathQuote": ""
+      },
+      {
+        "id": "FOX-MPB3C",
+        "player": "Laura",
+        "deck": {
+          "id": "DCK-0000007",
+          "name": "Dance of the Elements (Ashling)",
+          "colors": [
+            "W",
+            "U",
+            "B",
+            "R",
+            "G"
+          ],
+          "origIdx": 6
+        },
+        "life": 19,
+        "cmdrDmg": {
+          "2": 21
+        },
+        "isDead": true,
+        "deathCause": "cmdr_dmg",
+        "killerId": "FOX-1FGCZ",
+        "timeOfDeath": "00:00:10",
+        "themeVars": "--c1: rgba(250, 204, 21, 0.9); --c2: rgba(59, 130, 246, 0.9); --c3: rgba(124, 58, 237, 0.9); --c4: rgba(250, 204, 21, 0.9);",
+        "deathQuote": "Mana flooded, or just outplayed? 💀"
+      },
+      {
+        "id": "FOX-1FGCZ",
+        "player": "Julio",
+        "deck": {
+          "id": "DCK-0000003",
+          "name": "Endless Punishment (Valgavoth)",
+          "colors": [
+            "B",
+            "R"
+          ],
+          "origIdx": 2
+        },
+        "life": -16,
+        "cmdrDmg": {},
+        "isDead": true,
+        "deathCause": "life_loss",
+        "killerId": null,
+        "timeOfDeath": "00:00:17",
+        "themeVars": "--c1: rgba(124, 58, 237, 0.9); --c2: rgba(225, 29, 72, 0.9); --c3: rgba(124, 58, 237, 0.9); --c4: rgba(225, 29, 72, 0.9);",
+        "deathQuote": "Your Spark fades into the blind eternities... 🌑"
+      }
+    ],
+    "participants": [
+      {
+        "player_id": "FOX-00001",
+        "deck_id": "DCK-0000006",
+        "result": "winner",
+        "cause": null,
+        "killer": null,
+        "eliminated_at": null
+      },
+      {
+        "player_id": "FOX-MPB3C",
+        "deck_id": "DCK-0000007",
+        "result": "eliminated",
+        "cause": "cmdr_dmg",
+        "killer": "FOX-1FGCZ",
+        "eliminated_at": "00:00:10"
+      },
+      {
+        "player_id": "FOX-1FGCZ",
+        "deck_id": "DCK-0000003",
+        "result": "eliminated",
+        "cause": "life_loss",
+        "killer": null,
+        "eliminated_at": "00:00:17"
+      }
+    ]
+  }
+]
