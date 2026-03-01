@@ -3,6 +3,7 @@ import { state, saveData } from '../state.js';
 import { esc } from '../security.js';
 import { mfModal, playTransition, switchScreen } from '../ui.js';
 import { GIFS, winQuotes, triggerConfetti, generatePlayerID, formatTimeISO } from '../utils.js';
+import { saveMatchToGitHub } from './github-db.js'; // <-- Import añadido
 
 let jsInterval = null;
 
@@ -59,14 +60,16 @@ function goToJSPlayers() {
     const c = document.getElementById('js-player-inputs-container'); c.innerHTML = '';
     if(state.savedPlayers.length > 0) { document.getElementById('js-saved-players-section').classList.remove('hidden'); renderJSSavedPlayers(); }
     for(let i=0; i<state.js.count; i++) {
-        c.innerHTML += `<div class="bg-app-surface p-3 rounded-xl border border-white/5 flex items-center gap-3"><div class="bg-app-js/20 size-8 rounded-lg text-app-js font-black flex items-center justify-center">${i+1}</div><input type="text" id="p-in-js-${i}" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="setup-input w-full bg-transparent border-none text-white px-0" placeholder="Player Name" value="${esc(state.tempPlayerNames[i]||'')}"></div>`;
+        // A11Y FIX: Añadido aria-label al input
+        c.innerHTML += `<div class="bg-app-surface p-3 rounded-xl border border-white/5 flex items-center gap-3"><div class="bg-app-js/20 size-8 rounded-lg text-app-js font-black flex items-center justify-center">${i+1}</div><input type="text" id="p-in-js-${i}" aria-label="Player ${i+1} Name" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="setup-input w-full bg-transparent border-none text-white px-0" placeholder="Player Name" value="${esc(state.tempPlayerNames[i]||'')}"></div>`;
     }
     switchScreen(8);
 }
 
 function renderJSSavedPlayers() {
     const c = document.getElementById('js-saved-players-container'); if(!c) return;
-    c.innerHTML = state.savedPlayers.map((p,i)=>`<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAddJS('${esc(p.name)}')" class="setup-input size-12 rounded-full border border-app-js/40 bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-js/20">${esc(p.name[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(p.name)}</span></div>`).join('');
+    // A11Y FIX: Añadido aria-label al botón de borrar
+    c.innerHTML = state.savedPlayers.map((p,i)=>`<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button aria-label="Remove Saved Player" onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAddJS('${esc(p.name)}')" class="setup-input size-12 rounded-full border border-app-js/40 bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-js/20">${esc(p.name[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(p.name)}</span></div>`).join('');
 }
 
 function quickAddJS(n) { for(let i=0; i<state.js.count; i++){ const inp = document.getElementById('p-in-js-'+i); if(inp && !inp.value){ inp.value = n; state.tempPlayerNames[i] = n; break; } } saveData(); }
@@ -141,7 +144,8 @@ function renderJSSwiss() {
         if(isFinished) statusBadge = `<div class="absolute top-0 right-0 bg-app-js text-black text-[8px] font-black px-2 py-0.5 rounded-bl-lg rounded-tr-xl uppercase">Done</div>`;
         else if(match.ready1 && match.ready2) statusBadge = `<div class="absolute top-0 right-0 bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-bl-lg rounded-tr-xl uppercase animate-pulse">Fight!</div>`;
         else statusBadge = `<div class="absolute top-0 right-0 bg-blue-500 text-white text-[8px] font-black px-2 py-0.5 rounded-bl-lg rounded-tr-xl uppercase">Draft Phase</div>`;
-        return `<div onclick="${isFinished ? '' : `window.openJSMatchModal(${state.js.currentRound}, ${mIdx})`}" class="js-match-card relative bg-app-surface border border-white/5 rounded-2xl p-4 flex flex-col justify-center shadow-lg ${!isFinished ? 'cursor-pointer hover:border-app-js/50 hover:bg-app-surface-light transition-colors' : 'opacity-70'} mb-4">${statusBadge}<div class="flex justify-between items-center w-full"><span class="w-2/5 text-right truncate ${p1Class}">${esc(match.p1)}</span><div class="w-1/5 flex justify-center"><span class="text-[10px] font-black text-slate-500 bg-app-surface-light px-2 py-1 rounded-full border border-white/5">VS</span></div><span class="w-2/5 text-left truncate ${p2Class}">${esc(match.p2)}</span></div></div>`;
+        // A11Y FIX: Añadido role="button" y aria-label
+        return `<div role="button" aria-label="Match Card" onclick="${isFinished ? '' : `window.openJSMatchModal(${state.js.currentRound}, ${mIdx})`}" class="js-match-card relative bg-app-surface border border-white/5 rounded-2xl p-4 flex flex-col justify-center shadow-lg ${!isFinished ? 'cursor-pointer hover:border-app-js/50 hover:bg-app-surface-light transition-colors' : 'opacity-70'} mb-4">${statusBadge}<div class="flex justify-between items-center w-full"><span class="w-2/5 text-right truncate ${p1Class}">${esc(match.p1)}</span><div class="w-1/5 flex justify-center"><span class="text-[10px] font-black text-slate-500 bg-app-surface-light px-2 py-1 rounded-full border border-white/5">VS</span></div><span class="w-2/5 text-left truncate ${p2Class}">${esc(match.p2)}</span></div></div>`;
     }).join('');
     if (allFinished) {
         let isLastRound = state.js.currentRound === state.js.totalRounds - 1;    
@@ -153,7 +157,16 @@ function renderJSSwiss() {
     }
 }
 
-function openJSMatchModal(r, mIdx) { const match = state.js.rounds[r][mIdx]; const content = document.getElementById('js-modal-content'); if (!match.ready1 || !match.ready2) { content.innerHTML = `<h3 class="font-black text-2xl text-white tracking-widest uppercase mb-1 drop-shadow-md">Draft Phase</h3><p class="text-sm text-slate-300 mb-6">Grab 2 new packs and shuffle!<br>Both players must confirm.</p><div class="flex flex-col gap-4"><button onclick="window.toggleJSReady(${r}, ${mIdx}, 1)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready1 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p1)}</span><span class="material-symbols-outlined">${match.ready1 ? 'check_circle' : 'hourglass_empty'}</span></button><button onclick="window.toggleJSReady(${r}, ${mIdx}, 2)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready2 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p2)}</span><span class="material-symbols-outlined">${match.ready2 ? 'check_circle' : 'hourglass_empty'}</span></button></div>`; } else { content.innerHTML = `<h3 class="font-black text-2xl text-red-500 tracking-widest uppercase mb-1 drop-shadow-md animate-pulse">Declare Winner</h3><p class="text-sm text-slate-300 mb-6">Who survived the combat?</p><div class="flex gap-3"><button onclick="window.setJSWinner(${r}, ${mIdx}, '${esc(match.p1)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p1)}</span></button><button onclick="window.setJSWinner(${r}, ${mIdx}, '${esc(match.p2)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p2)}</span></button></div>`; } document.getElementById('js-match-modal').classList.remove('hidden'); }
+function openJSMatchModal(r, mIdx) { 
+    const match = state.js.rounds[r][mIdx]; const content = document.getElementById('js-modal-content'); 
+    if (!match.ready1 || !match.ready2) { 
+        content.innerHTML = `<h3 class="font-black text-2xl text-white tracking-widest uppercase mb-1 drop-shadow-md">Draft Phase</h3><p class="text-sm text-slate-300 mb-6">Grab 2 new packs and shuffle!<br>Both players must confirm.</p><div class="flex flex-col gap-4"><button onclick="window.toggleJSReady(${r}, ${mIdx}, 1)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready1 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p1)}</span><span class="material-symbols-outlined">${match.ready1 ? 'check_circle' : 'hourglass_empty'}</span></button><button onclick="window.toggleJSReady(${r}, ${mIdx}, 2)" class="w-full py-5 rounded-xl font-black text-xl transition-all shadow-lg border-2 ${match.ready2 ? 'bg-green-500 border-green-400 text-white' : 'bg-app-surface-light border-white/10 text-slate-400 hover:border-white/30'} flex justify-between items-center px-6"><span class="truncate w-3/4 text-left">${esc(match.p2)}</span><span class="material-symbols-outlined">${match.ready2 ? 'check_circle' : 'hourglass_empty'}</span></button></div>`; 
+    } else { 
+        content.innerHTML = `<h3 class="font-black text-2xl text-red-500 tracking-widest uppercase mb-1 drop-shadow-md animate-pulse">Declare Winner</h3><p class="text-sm text-slate-300 mb-6">Who survived the combat?</p><div class="flex gap-3"><button onclick="window.setJSWinner(${r}, ${mIdx}, '${esc(match.p1)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p1)}</span></button><button onclick="window.setJSWinner(${r}, ${mIdx}, '${esc(match.p2)}')" class="flex-1 py-6 bg-app-surface-light border border-app-js/30 rounded-xl hover:bg-app-js/20 hover:border-app-js transition-all flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span class="material-symbols-outlined text-3xl text-app-js">military_tech</span><span class="font-black text-white truncate w-full px-2">${esc(match.p2)}</span></button></div>`; 
+    } 
+    document.getElementById('js-match-modal').classList.remove('hidden'); 
+}
+
 function toggleJSReady(r, mI, pN) { if(pN===1) state.js.rounds[r][mI].ready1 = !state.js.rounds[r][mI].ready1; else state.js.rounds[r][mI].ready2 = !state.js.rounds[r][mI].ready2; saveData(); openJSMatchModal(r, mI); renderJSSwiss(); }        
 function closeJSModal() { document.getElementById('js-match-modal').classList.add('hidden'); }
 
@@ -185,6 +198,7 @@ function finishSwiss() {
     showJSUltimateWinner(sorted);
 }
 
+// --- CONEXIÓN A BASE DE DATOS (SNAPSHOT) ---
 function showJSUltimateWinner(sortedPlayers) {
     if(jsInterval) clearInterval(jsInterval);
     playTransition(GIFS.WINNER, 3200, () => {
@@ -192,21 +206,27 @@ function showJSUltimateWinner(sortedPlayers) {
         triggerConfetti(null);
         assignTieBreakers(sortedPlayers);
 
-        let podiumLog = sortedPlayers.slice(0,3).map(p => p.name);
-        let podiumIds = sortedPlayers.slice(0,3).map(p => p.id);
-        
-        state.history.unshift({ 
-            id: 'MTC-' + Math.random().toString(36).substring(2,7).toUpperCase(),
-            date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), 
-            mode: 'Jumpstart',
+        // Armamos el registro de la base de datos
+        const matchRecord = { 
+            id: 'JS-' + Math.random().toString(36).substring(2,7).toUpperCase(),
+            date: new Date().toISOString(),
+            mode: 'jumpstart',
             duration: formatTimeISO(state.matchDurationSeconds),
-            winner: w.name,
             winner_id: w.id,
-            podiumLog: podiumLog,
-            podium: podiumIds,
-            tie_breaker_used: sortedPlayers.some(p => p.tieReason) ? "Tie-Breakers active" : null
-        });
+            participants: sortedPlayers.map((p, i) => ({
+                player_id: p.id,
+                name: p.name,
+                rank: i + 1,
+                points: p.points,
+                tie_reason: p.tieReason || null
+            }))
+        };
+
+        state.history.unshift(matchRecord);
         saveData();
+        
+        // ¡Se guarda en la nube!
+        saveMatchToGitHub(matchRecord);
 
         let rankingsHTML = sortedPlayers.map((p,i) => {
             let medal = i===0 ? '🏆' : (i===1 ? '🥈' : (i===2 ? '🥉' : ''));
