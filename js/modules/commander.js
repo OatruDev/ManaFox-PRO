@@ -52,7 +52,7 @@ export function initCommander() {
     if (state.step === 1) { 
         document.getElementById('count-players').innerText = state.players; 
         document.getElementById('count-decks').innerText = state.decks; 
-        window.syncCloudHistory(); // 🐛 BUG 5: Auto-Pull from GitHub on load
+        window.syncCloudHistory(); 
     } 
     else if (state.step === 2) buildDeckDOM(); 
     else if (state.step === 3) goToPlayers(); 
@@ -62,8 +62,6 @@ export function initCommander() {
     
     if (state.step < 5) renderHistory();
 }
-
-// --- CONEXIONES GLOBALES PARA HTML ---
 
 window.updateCount = function(t, v) { state[t] = Math.min(t === 'players' ? 6 : 20, Math.max(2, state[t] + v)); document.getElementById('count-' + t).innerText = state[t]; saveData(); }
 window.applyDandLPreset = function() { state.players = 2; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura"]; state.playerLocks = []; state.playerBans = [[], [4]]; saveData(); goToDecks(); }
@@ -97,7 +95,7 @@ function syncDecksToLibrary() {
         const inputNode = document.getElementById(`deck-input-${i}`); if (inputNode && inputNode.value !== undefined) { d.name = inputNode.value.trim(); }
         if (d.name && d.name !== "") { let isUnique = !allE.some(ex => (ex.name || '').toLowerCase() === d.name.toLowerCase()); if (isUnique) { let newId = generateDeckID(); d.id = newId; state.savedDecks.push({ id: newId, name: d.name, colors: [...d.colors] }); nw = true; } }
     });
-    if (nw) saveData();
+    if (nw) { saveData(); saveMatchToGitHub(null); } // Forzamos push silencioso si hay mazos nuevos
 }
 
 window.openLibraryManager = function() {
@@ -123,7 +121,7 @@ window.openLibraryManager = function() {
 }
 
 window.closeLibraryManager = function() { const m = document.getElementById('library-modal'); if(m) { m.style.display = 'none'; m.classList.add('hidden'); } buildDeckDOM(); }
-window.deleteSavedDeck = async function(idx) { const c = await mfModal.show("Delete Deck?", "Permanently remove this custom deck?", "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); window.openLibraryManager(); } }
+window.deleteSavedDeck = async function(idx) { const c = await mfModal.show("Delete Deck?", "Permanently remove this custom deck?", "delete", "confirm"); if (c) { state.savedDecks.splice(idx, 1); saveData(); saveMatchToGitHub(null); window.openLibraryManager(); } }
 
 function savePlayerInputs() { for (let i = 0; i < state.players; i++) { let input = document.getElementById(`p-in-${i}`); if (input) state.tempPlayerNames[i] = esc(input.value); } }
 window.setPlayerLock = function(pIdx, dIdx) { savePlayerInputs(); state.playerLocks[pIdx] = dIdx; if (dIdx !== -1 && state.playerBans[pIdx] && state.playerBans[pIdx].includes(dIdx)) { state.playerBans[pIdx] = state.playerBans[pIdx].filter(id => id !== dIdx); } saveData(); goToPlayers(); }
@@ -158,7 +156,7 @@ function goToPlayers() {
 
 function renderSavedPlayers() { document.getElementById('saved-players-container').innerHTML = state.savedPlayers.map((p, i) => `<div class="relative flex flex-col items-center shrink-0 mt-2 group"><button aria-label="Remove Saved Player" onclick="window.deleteSavedPlayer(${i})" class="absolute -top-1 -right-1 bg-app-surface text-slate-500 text-[9px] size-[18px] flex items-center justify-center rounded-full border border-white/10 hover:bg-red-600 hover:text-white transition-all shadow-sm z-10 opacity-70 hover:opacity-100">✕</button><div onclick="window.quickAdd('${esc(p.name)}')" class="setup-input size-12 rounded-full border border-app-primary bg-app-surface-light flex items-center justify-center font-bold text-white shadow-sm cursor-pointer hover:bg-app-primary/20 transition-colors">${esc(p.name[0].toUpperCase())}</div><span class="text-[9px] truncate w-14 text-center mt-1 text-slate-400 uppercase font-bold">${esc(p.name)}</span></div>`).join(''); }
 window.quickAdd = function(n) { for (let i = 0; i < state.players; i++) { const inp = document.getElementById('p-in-' + i); if (inp && !inp.value) { inp.value = n; state.tempPlayerNames[i] = n; break; } } saveData(); }
-window.deleteSavedPlayer = async function(i) { const c = await mfModal.show("Remove Player?", `Permanently remove "${esc(state.savedPlayers[i].name)}"?`, "person_remove", "confirm"); if (c) { state.savedPlayers.splice(i, 1); saveData(); renderSavedPlayers(); if (state.savedPlayers.length === 0) document.getElementById('saved-players-section').classList.add('hidden'); } }
+window.deleteSavedPlayer = async function(i) { const c = await mfModal.show("Remove Player?", `Permanently remove "${esc(state.savedPlayers[i].name)}"?`, "person_remove", "confirm"); if (c) { state.savedPlayers.splice(i, 1); saveData(); saveMatchToGitHub(null); renderSavedPlayers(); if (state.savedPlayers.length === 0) document.getElementById('saved-players-section').classList.add('hidden'); } }
 window.removePlayer = function(i) { if (state.players <= 1) return; state.tempPlayerNames.splice(i, 1); state.playerLocks.splice(i, 1); state.playerBans.splice(i, 1); state.players--; goToPlayers(); saveData(); }
 window.addExtraPlayer = function() { state.players++; goToPlayers(); saveData(); }        
 
@@ -180,8 +178,6 @@ function executeAssignment() {
 }
 
 window.reassignDecks = function() { executeAssignment(); }
-
-// 🐛 BUG 4 CORREGIDO: Se restauró la lógica para mostrar los mazos restantes
 function buildResultsDOM() {
     const c = document.getElementById('assignments-container'); c.innerHTML = '';
     state.currentMatch.forEach(m => {
@@ -247,7 +243,6 @@ function renderBattlefield() {
 
 function renderCmdrDamageIcons(player) { let html = ''; for (let attackerIdx in player.cmdrDmg) { let dmg = player.cmdrDmg[attackerIdx]; if (dmg > 0 && state.currentMatch[attackerIdx] && !state.currentMatch[attackerIdx].isDead) { html += `<div class="size-8 rounded-full bg-red-900/90 border border-red-500/50 flex items-center justify-center flex-col"><span class="text-[8px] font-bold text-red-200">${esc(state.currentMatch[attackerIdx].player[0].toUpperCase())}</span><span class="text-[12px] font-black text-white">${dmg}</span></div>`; } } return html; }
 
-// 🐛 BUG 1 CORREGIDO: Se añadió ID "cmdr-val-idx-i" a los números para actualizarlos dinámicamente sin cerrar el modal.
 window.openCmdrModal = function(idx, rotDeg) { 
     const t = state.currentMatch[idx]; 
     document.getElementById('cmdr-target-name').innerText = t.player; 
@@ -256,7 +251,6 @@ window.openCmdrModal = function(idx, rotDeg) {
     document.getElementById('cmdr-modal').classList.remove('hidden'); 
 }
 
-// 🐛 BUG 1 CORREGIDO: Ahora inyecta el nuevo valor visualmente de inmediato y ejecuta checkEliminations al llegar a 21
 window.changeCmdrDmg = function(tI, aI, v) { 
     saveUndoState(); 
     let t = state.currentMatch[tI]; 
@@ -290,7 +284,6 @@ async function checkEliminations() {
     let alive = state.currentMatch.filter(p => !p.isDead); if (alive.length === 1 && state.currentMatch.length > 1) window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead));
 }
 
-// 🐛 BUG 3 CORREGIDO: Botón AWAKE cambia de color y siempre dice "Awake"
 window.buildRadialMenu = function() {
     let radial = document.getElementById('radial-menu-overlay'); if (!radial) return;
     radial.querySelectorAll('.radial-btn').forEach(b => b.remove());
@@ -338,11 +331,57 @@ window.toggleCenterMenu = function() {
 window.handleWakeLockToggle = async function() { const isActive = await toggleWakeLock(); mfModal.show(isActive ? "Awake ON" : "Awake OFF", "", "flare"); window.toggleCenterMenu(); }
 window.toggleKeepAwake = window.handleWakeLockToggle; 
 window.resetLife = async function() { window.toggleCenterMenu(); const c = await mfModal.show("Reset Match?", "Life back to 40.", "refresh", "confirm"); if (c) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); state.undoStack = []; state.matchDurationSeconds = 0; saveData(); renderBattlefield(); } }
-window.rollD20All = function() { window.toggleCenterMenu(); document.getElementById('dice-modal').classList.remove('hidden'); let html = ''; state.currentMatch.forEach((p, i) => { if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 w-full"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; }); document.getElementById('dice-container').innerHTML = html; let count = 0; let int = setInterval(() => { state.currentMatch.forEach((p, i) => { if (!p.isDead) { let el = document.getElementById(`dice-p-${i}`); if (el) el.innerText = Math.floor(Math.random() * 20) + 1; } }); count++; if (count > 20) { clearInterval(int); state.currentMatch.forEach((p, i) => { if (!p.isDead) { let r = Math.floor(Math.random() * 20) + 1; let el = document.getElementById(`dice-p-${i}`); if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } } }); setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 3500); } }, 50); }
+
+window.rollD20All = function() { 
+    window.toggleCenterMenu(); 
+    document.getElementById('dice-modal').classList.remove('hidden'); 
+    let html = ''; 
+    state.currentMatch.forEach((p, i) => { 
+        if (!p.isDead) html += `<div id="dice-row-${i}" class="flex justify-between items-center bg-app-surface-light p-4 rounded-2xl border border-white/5 w-full transition-all duration-300"><span class="font-bold text-xl text-slate-300">${esc(p.player)}</span><span id="dice-p-${i}" class="text-4xl font-black text-white animate-pulse">0</span></div>`; 
+    }); 
+    document.getElementById('dice-container').innerHTML = html; 
+    
+    let count = 0; 
+    let int = setInterval(() => { 
+        state.currentMatch.forEach((p, i) => { 
+            if (!p.isDead) { 
+                let el = document.getElementById(`dice-p-${i}`); 
+                if (el) el.innerText = Math.floor(Math.random() * 20) + 1; 
+            } 
+        }); 
+        count++; 
+        if (count > 20) { 
+            clearInterval(int); 
+            let maxRoll = -1;
+            let finalRolls = [];
+            state.currentMatch.forEach((p, i) => { 
+                if (!p.isDead) { 
+                    let r = Math.floor(Math.random() * 20) + 1; 
+                    finalRolls.push({i, r});
+                    if(r > maxRoll) maxRoll = r;
+                    let el = document.getElementById(`dice-p-${i}`); 
+                    if (el) { el.innerText = r; el.classList.remove('animate-pulse'); } 
+                } 
+            }); 
+
+            finalRolls.forEach(rollObj => {
+                if(rollObj.r === maxRoll) {
+                    let row = document.getElementById(`dice-row-${rollObj.i}`);
+                    let text = document.getElementById(`dice-p-${rollObj.i}`);
+                    if(row) { row.classList.remove('bg-app-surface-light', 'border-white/5'); row.classList.add('bg-yellow-400/20', 'border-yellow-400', 'shadow-[0_0_15px_rgba(250,204,21,0.3)]'); }
+                    if(text) { text.classList.remove('text-white'); text.classList.add('text-yellow-400'); text.innerHTML = `${rollObj.r} <span class="material-symbols-outlined text-[28px] align-middle drop-shadow-md">emoji_events</span>`; }
+                }
+            });
+
+            setTimeout(() => { document.getElementById('dice-modal').classList.add('hidden'); }, 4000); 
+        } 
+    }, 50); 
+}
+
 window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
 window.goToScreen6Manual = function() { clearInterval(matchInterval); state.matchFinished = false; switchScreen(6); document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div aria-label="Select Winner" onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-bold text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); }
 
-// 🐛 BUG 2 CORREGIDO: Se restauró la caja de "Win Quotes" en la pantalla de la victoria
+// 💾 SISTEMA DE GRABADO RIGUROSO: Crea un "Snapshot" perfecto que exige el formato nuevo
 window.showUltimateWinner = function(idx) {
     releaseWakeLock(); clearInterval(matchInterval);
     playTransition(GIFS.WINNER, 3200, () => {
@@ -368,7 +407,7 @@ window.showUltimateWinner = function(idx) {
 
         state.history.unshift(matchRecord);
         saveData(); renderHistory();
-        saveMatchToGitHub(matchRecord);
+        saveMatchToGitHub(matchRecord); // Ahora también envía los mazos locales
         
         document.getElementById('screen-6').innerHTML = `
         <div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full">
@@ -382,7 +421,7 @@ window.showUltimateWinner = function(idx) {
     });
 }
 
-// 🐛 BUG 5 CORREGIDO: Función de sincronización para hacer pull de db.json en GitHub
+// 🛡️ SINCRONIZADOR ESTRICTO: Lee solo el nuevo formato y fusiona tu DB correctamente.
 window.syncCloudHistory = async function() {
     try {
         const btn = document.getElementById('sync-btn-icon');
@@ -391,15 +430,29 @@ window.syncCloudHistory = async function() {
         const res = await fetch('https://raw.githubusercontent.com/OatruDev/ManaFox-PRO/main/db.json?t=' + Date.now());
         if (res.ok) {
             const data = await res.json();
-            const cloudHistory = Array.isArray(data) ? data : (data.matches || data.history || []);
             
+            const cloudHistory = Array.isArray(data) ? data : (data.matches || []);
             if (cloudHistory.length > 0) {
-                let localMap = new Map(state.history.map(m => [m.id, m]));
+                let localMap = new Map((state.history||[]).map(m => [m.id, m]));
                 cloudHistory.forEach(m => localMap.set(m.id, m));
                 state.history = Array.from(localMap.values()).sort((a,b) => new Date(b.date) - new Date(a.date));
-                saveData();
-                renderHistory();
             }
+
+            if (data.decks && Array.isArray(data.decks)) {
+                let localDecks = new Map((state.savedDecks||[]).map(d => [d.id, d]));
+                data.decks.forEach(d => localDecks.set(d.id, d));
+                state.savedDecks = Array.from(localDecks.values());
+            }
+
+            if (data.players && Array.isArray(data.players)) {
+                let localPlayers = new Map((state.savedPlayers||[]).map(p => [p.id, p]));
+                data.players.forEach(p => localPlayers.set(p.id, p));
+                state.savedPlayers = Array.from(localPlayers.values());
+            }
+
+            saveData();
+            renderHistory();
+            if(state.step === 2) buildDeckDOM();
         }
         if (btn) setTimeout(() => btn.classList.remove('animate-spin'), 1000);
     } catch (e) {
@@ -416,22 +469,29 @@ window.startOver = function() {
     saveData(); switchScreen(1); renderHistory();
 }
 
-// 🐛 BUG 3 CORREGIDO: Los íconos de maná del historial ahora se pintan usando text-slate-500 (estilo B&W)
 function renderHistory() {
     const c = document.getElementById('history-container'); if(!c) return;
     if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); else document.getElementById('history-section').classList.add('hidden');      
     
     c.innerHTML = state.history.slice(0, 5).map((m, i) => {
-        let wObj = m.players ? m.players.find(p => p.result === 'winner' || p.player_id === m.winner_id) : null;
-        let pName = wObj ? wObj.name : (m.winner?.player || m.winner || 'Unknown');
-        let dName = (wObj && wObj.deck) ? wObj.deck.name : 'Unknown Deck';
+        // Modo estricto: asume el nuevo modelo `players`
+        if (!m.players) return ''; // Ignora silenciosamente registros que no cumplan el formato
+
+        let wObj = m.players.find(p => p.result === 'winner' || p.player_id === m.winner_id);
+        if (!wObj) return '';
+
+        let pName = wObj.name;
+        let deckSection = '';
         
-        let colorsHtml = '';
-        if (wObj && wObj.deck && wObj.deck.colors) {
-            colorsHtml = wObj.deck.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px] text-slate-500 drop-shadow-sm"></i>`).join(' ');
+        if (wObj.deck) {
+            let dName = wObj.deck.name;
+            let colorsHtml = wObj.deck.colors.map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px] text-slate-500 drop-shadow-sm"></i>`).join(' ');
+            deckSection = `<div class="flex justify-between items-center mt-2"><span class="text-[10px] text-slate-300 uppercase truncate font-bold w-32">${esc(dName)}</span><div class="flex gap-1">${colorsHtml}</div></div>`;
+        } else {
+            deckSection = `<div class="flex justify-between items-center mt-2"><span class="text-[10px] text-slate-500 uppercase font-bold italic">No Deck Drafted</span></div>`;
         }
 
-        return `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button aria-label="Delete History" onclick="window.deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 transition-all z-10"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex flex-col mb-1 pr-8"><div class="flex justify-between text-slate-500 uppercase font-bold tracking-tighter"><span>${m.date.split('T')[0]}</span><span class="text-yellow-400">🏆 ${esc(pName)}</span></div><div class="flex justify-between items-center mt-2"><span class="text-[10px] text-slate-300 uppercase truncate font-bold w-32">${esc(dName)}</span><div class="flex gap-1">${colorsHtml}</div></div></div><p class="text-[9px] text-slate-500 mt-1">⏱️ ${m.duration || '00:00'}</p></div>`;
+        return `<div class="bg-app-surface p-3 rounded-xl border border-white/5 text-[11px] shadow-sm relative group"><button aria-label="Delete History" onclick="window.deleteHistoryEntry(${i})" class="absolute top-2 right-2 text-slate-600 hover:text-red-500 transition-all z-10"><span class="material-symbols-outlined text-[16px]">delete</span></button><div class="flex flex-col mb-1 pr-8"><div class="flex justify-between text-slate-500 uppercase font-bold tracking-tighter"><span>${m.date.split('T')[0]}</span><span class="text-yellow-400">🏆 ${esc(pName)}</span></div>${deckSection}</div><p class="text-[9px] text-slate-500 mt-1">⏱️ ${m.duration || '00:00'}</p></div>`;
     }).join('');
 }
 
@@ -441,7 +501,7 @@ export function goBackCommander() {
     else if (state.step === 4) switchScreen(3);
 }
 
-window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete?", "", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); renderHistory(); } }
+window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete?", "", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); saveMatchToGitHub(null); renderHistory(); } }
 
 export function handleCommanderNext() {
     if (state.step === 1) goToDecks(); 
@@ -455,7 +515,8 @@ export function handleCommanderNext() {
                 state.savedPlayers.push({ id: newId, name: v, addedAt: Date.now() }); nwP = true; 
             } 
         }
-        if (nwP) saveData(); executeAssignment();
+        if (nwP) { saveData(); saveMatchToGitHub(null); }
+        executeAssignment();
     }
     else if (state.step === 4) initBattlefield();
 }

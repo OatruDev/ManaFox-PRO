@@ -1,23 +1,22 @@
 // /js/modules/github-db.js
+import { state } from '../state.js';
 
-export async function saveMatchToGitHub(matchData) {
+export async function saveMatchToGitHub(matchRecord) {
     try {
-        console.log("☁️ [DB] Handing match data over to secure Bouncer...");
+        // Ahora empaquetamos la Base de Datos COMPLETA, no solo la partida
+        const payload = {
+            matches: state.history || [],
+            decks: state.savedDecks || [],
+            players: state.savedPlayers || []
+        };
         
-        const response = await fetch('/api/save', {
+        // Lo mandamos al Bouncer de Vercel
+        await fetch('/api/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(matchData)
+            body: JSON.stringify(payload)
         });
-
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            // Aquí está la magia: ahora imprimirá los DETALLES exactos
-            throw new Error(`Bouncer crashed: ${errData.error}. Details: ${errData.details || 'None'}`);
-        }
-        
-        console.log("✅ [DB] Match successfully immortalized via Serverless Proxy!");
-    } catch (error) {
-        console.error("❌ [DB] Proxy Sync Error:", error.message);
+    } catch (e) {
+        console.error("Cloud save failed:", e);
     }
 }
