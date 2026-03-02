@@ -95,7 +95,7 @@ function syncDecksToLibrary() {
         const inputNode = document.getElementById(`deck-input-${i}`); if (inputNode && inputNode.value !== undefined) { d.name = inputNode.value.trim(); }
         if (d.name && d.name !== "") { let isUnique = !allE.some(ex => (ex.name || '').toLowerCase() === d.name.toLowerCase()); if (isUnique) { let newId = generateDeckID(); d.id = newId; state.savedDecks.push({ id: newId, name: d.name, colors: [...d.colors] }); nw = true; } }
     });
-    if (nw) { saveData(); saveMatchToGitHub(null); } // Forzamos push silencioso si hay mazos nuevos
+    if (nw) { saveData(); saveMatchToGitHub(null); }
 }
 
 window.openLibraryManager = function() {
@@ -332,6 +332,7 @@ window.handleWakeLockToggle = async function() { const isActive = await toggleWa
 window.toggleKeepAwake = window.handleWakeLockToggle; 
 window.resetLife = async function() { window.toggleCenterMenu(); const c = await mfModal.show("Reset Match?", "Life back to 40.", "refresh", "confirm"); if (c) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); state.undoStack = []; state.matchDurationSeconds = 0; saveData(); renderBattlefield(); } }
 
+// 🛡️ D20 CORREGIDO: Estilo verde esmeralda, sin emojis extraños
 window.rollD20All = function() { 
     window.toggleCenterMenu(); 
     document.getElementById('dice-modal').classList.remove('hidden'); 
@@ -368,8 +369,8 @@ window.rollD20All = function() {
                 if(rollObj.r === maxRoll) {
                     let row = document.getElementById(`dice-row-${rollObj.i}`);
                     let text = document.getElementById(`dice-p-${rollObj.i}`);
-                    if(row) { row.classList.remove('bg-app-surface-light', 'border-white/5'); row.classList.add('bg-yellow-400/20', 'border-yellow-400', 'shadow-[0_0_15px_rgba(250,204,21,0.3)]'); }
-                    if(text) { text.classList.remove('text-white'); text.classList.add('text-yellow-400'); text.innerHTML = `${rollObj.r} <span class="material-symbols-outlined text-[28px] align-middle drop-shadow-md">emoji_events</span>`; }
+                    if(row) { row.classList.remove('bg-app-surface-light', 'border-white/5'); row.classList.add('bg-emerald-500/20', 'border-emerald-500', 'shadow-[0_0_15px_rgba(16,185,129,0.3)]'); }
+                    if(text) { text.classList.remove('text-white'); text.classList.add('text-emerald-500'); text.innerHTML = rollObj.r; }
                 }
             });
 
@@ -381,7 +382,6 @@ window.rollD20All = function() {
 window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
 window.goToScreen6Manual = function() { clearInterval(matchInterval); state.matchFinished = false; switchScreen(6); document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div aria-label="Select Winner" onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-bold text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); }
 
-// 💾 SISTEMA DE GRABADO RIGUROSO: Crea un "Snapshot" perfecto que exige el formato nuevo
 window.showUltimateWinner = function(idx) {
     releaseWakeLock(); clearInterval(matchInterval);
     playTransition(GIFS.WINNER, 3200, () => {
@@ -407,7 +407,7 @@ window.showUltimateWinner = function(idx) {
 
         state.history.unshift(matchRecord);
         saveData(); renderHistory();
-        saveMatchToGitHub(matchRecord); // Ahora también envía los mazos locales
+        saveMatchToGitHub(matchRecord); 
         
         document.getElementById('screen-6').innerHTML = `
         <div class="flex flex-col items-center justify-center pt-8 text-center px-4 w-full">
@@ -421,7 +421,6 @@ window.showUltimateWinner = function(idx) {
     });
 }
 
-// 🛡️ SINCRONIZADOR ESTRICTO: Lee solo el nuevo formato y fusiona tu DB correctamente.
 window.syncCloudHistory = async function() {
     try {
         const btn = document.getElementById('sync-btn-icon');
@@ -474,8 +473,7 @@ function renderHistory() {
     if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); else document.getElementById('history-section').classList.add('hidden');      
     
     c.innerHTML = state.history.slice(0, 5).map((m, i) => {
-        // Modo estricto: asume el nuevo modelo `players`
-        if (!m.players) return ''; // Ignora silenciosamente registros que no cumplan el formato
+        if (!m.players) return ''; 
 
         let wObj = m.players.find(p => p.result === 'winner' || p.player_id === m.winner_id);
         if (!wObj) return '';

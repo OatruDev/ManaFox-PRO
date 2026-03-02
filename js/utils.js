@@ -10,7 +10,7 @@ export const baseDecks = [
     { id: "DCK-0000002", name: "Sultai Arisen (Teval)", colors: ['B', 'G', 'U'] },
     { id: "DCK-0000003", name: "Endless Punishment (Valgavoth)", colors: ['B', 'R'] },
     { id: "DCK-0000004", name: "Death Toll (Winter)", colors: ['B', 'G'] },      
-    { id: "DCK-0000005", name: "Evangelion (Eva01)", colors: ['W', 'G', 'U'] },        
+    { id: "DCK-0000005", name: "Evangelion (Eva01)", colors: ['W', 'U'] },        
     { id: "DCK-0000006", name: "Eldrazi Incursion (Ulalek)", colors: ['W', 'U', 'B', 'R', 'G'] },
     { id: "DCK-0000007", name: "Dance of the Elements (Ashling)", colors: ['W', 'U', 'B', 'R', 'G'] }
 ];
@@ -62,7 +62,6 @@ export function formatTimeISO(secs) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// NUEVO: Motor de formateo dinámico para el botón central (mm:ss a hh:mm:ss)
 export function formatLiveClock(secs) {
     let totalM = Math.floor(secs / 60);
     let h = Math.floor(totalM / 60);
