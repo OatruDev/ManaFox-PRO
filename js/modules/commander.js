@@ -8,6 +8,10 @@ import { saveMatchToGitHub } from './github-db.js';
 let wakeLock = null;
 let matchInterval = null;
 
+// Variables para el "Undo Inteligente" y Optimización de Batería
+let isBatchingLife = false;
+let lifeBatchTimeout = null;
+
 async function toggleWakeLock() {
     if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; return false; } 
     else { try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); return true; } } catch (err) { console.error("Wake Lock error:", err); } return false; }
@@ -200,11 +204,78 @@ function buildResultsDOM() {
 
 function initBattlefield() { playTransition(GIFS.BATTLE, 2600, async () => { renderBattlefield(); switchScreen(5); startMatchClock(); try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }); }
 function saveUndoState() { if (!state.undoStack) state.undoStack = []; state.undoStack.push(JSON.parse(JSON.stringify(state.currentMatch))); if (state.undoStack.length > 20) state.undoStack.shift(); }
-window.undoLastAction = function() { if (menuOpen) window.toggleCenterMenu(); if (!state.undoStack || state.undoStack.length === 0) return mfModal.show("Undo", "No previous actions.", "info"); state.currentMatch = state.undoStack.pop(); saveData(); renderBattlefield(); }
 
-window.handleTapStart = function(e, idx, amt) { if (e && e.cancelable) e.preventDefault(); if (state.currentMatch[idx].isDead) return; saveUndoState(); changeLife(idx, amt); }
-window.handleTapEnd = function(e) { if (e && e.cancelable) e.preventDefault(); setTimeout(() => checkEliminations(), 50); }
-function changeLife(idx, amt) { if (state.currentMatch[idx].isDead) return; state.currentMatch[idx].life += amt; const displayNode = document.getElementById(`life-display-${idx}`); if (displayNode) displayNode.innerText = state.currentMatch[idx].life; saveData(); }
+// 🔋 UNDO Y BATERÍA: Desacoplar guardado en disco y agrupar toques (Batching de 2.5s)
+window.handleTapStart = function(e, idx, amt, isLongPress = false) { 
+    if (e && e.cancelable && e.type !== 'mousedown') e.preventDefault(); 
+    if (state.currentMatch[idx].isDead) return; 
+    
+    // Si es el primer toque de la ráfaga, creamos el "Undo" original.
+    if (!isBatchingLife) {
+        saveUndoState(); 
+        isBatchingLife = true;
+    }
+    
+    clearTimeout(lifeBatchTimeout);
+    changeLife(idx, amt);
+
+    // Feedback Visual + Lógica de Long Press para +/- 5
+    if (!isLongPress) {
+        const zone = document.getElementById(`tap-zone-${idx}-${amt > 0 ? 'plus' : 'minus'}`);
+        if(zone) {
+            zone.classList.add(amt > 0 ? 'bg-white/10' : 'bg-black/30');
+            setTimeout(() => zone.classList.remove('bg-white/10', 'bg-black/30'), 150);
+        }
+        
+        window.tapInterval = setTimeout(() => {
+            window.handleTapStart(null, idx, amt > 0 ? 4 : -4, true); // Suma los 4 que faltan para llegar a 5
+            window.tapRepeating = setInterval(() => {
+                window.handleTapStart(null, idx, amt > 0 ? 5 : -5, true); // Ráfaga de 5 en 5 si mantiene pulsado
+            }, 400);
+        }, 500);
+    } else {
+        const zone = document.getElementById(`tap-zone-${idx}-${amt > 0 ? 'plus' : 'minus'}`);
+        if(zone) {
+            zone.classList.add(amt > 0 ? 'bg-white/30' : 'bg-black/50');
+            setTimeout(() => zone.classList.remove('bg-white/30', 'bg-black/50'), 150);
+        }
+    }
+}
+
+window.handleTapEnd = function(e) { 
+    if (e && e.cancelable && e.type !== 'mouseup') e.preventDefault(); 
+    
+    clearTimeout(window.tapInterval);
+    clearInterval(window.tapRepeating);
+
+    clearTimeout(lifeBatchTimeout);
+    lifeBatchTimeout = setTimeout(() => {
+        isBatchingLife = false;
+        saveData(); // Ahorro de batería: Guarda en disco solo 2.5s después de terminar de tocar
+        checkEliminations();
+    }, 2500);
+}
+
+// Ahorro de Batería: Modifica el DOM directo sin repintar todo el Grid
+function changeLife(idx, amt) { 
+    if (state.currentMatch[idx].isDead) return; 
+    state.currentMatch[idx].life += amt; 
+    const displayNode = document.getElementById(`life-display-${idx}`); 
+    if (displayNode) displayNode.innerText = state.currentMatch[idx].life; 
+}
+
+window.undoLastAction = function() { 
+    if (menuOpen) window.toggleCenterMenu(); 
+    if (!state.undoStack || state.undoStack.length === 0) return mfModal.show("Undo", "No previous actions.", "info"); 
+    
+    // Interrumpir cualquier Batching pendiente
+    clearTimeout(lifeBatchTimeout);
+    isBatchingLife = false;
+    
+    state.currentMatch = state.undoStack.pop(); 
+    saveData(); 
+    renderBattlefield(); 
+}
 
 function renderBattlefield() {
     const grid = document.getElementById('battlefield-grid'); const count = state.currentMatch.length;
@@ -219,22 +290,31 @@ function renderBattlefield() {
         if (count === 4 && state.layoutMode === 'cross') { posClass = `cross-pos-${i}`; if (i === 0) rotDeg = 180; if (i === 1) rotDeg = 90; if (i === 2) rotDeg = -90; if (i === 3) rotDeg = 0; } 
         else { if (count === 2 && i === 0) rotDeg = 180; if (count === 3) { if (i === 0) { rotDeg = 180; posClass = 'bf-3p-top'; } } if (count >= 4 && (i === 0 || i === 1)) rotDeg = 180; if (count === 6 && i === 2) rotDeg = 180; }
 
-        let flexDir = (rotDeg === 90 || rotDeg === -90) ? 'flex-row' : 'flex-col';
         let deadOverlay = p.isDead ? `<div class="absolute inset-0 bg-zinc-950/85 backdrop-grayscale z-30 flex flex-col items-center justify-center pointer-events-auto" style="transform: rotate(${rotDeg}deg)"><span class="material-symbols-outlined text-[24vmin] text-[#1e83f5] drop-shadow-[0_0_35px_rgba(30,131,245,0.8)]">skull</span><p class="text-slate-300 font-medium italic mt-4 text-center px-8 text-sm">"${esc(p.deathQuote)}"</p></div>` : '';
         
         grid.innerHTML += `
         <div class="relative w-full h-full flex flex-col justify-center items-center ${posClass} select-none overflow-hidden bg-texture liquid-bg" style="${p.themeVars}">
-            <div class="absolute inset-0 flex ${flexDir} z-10 ${p.isDead ? 'hidden' : ''}">
-                <div class="flex-1 w-full h-full cursor-pointer active:bg-white/10 transition-colors" onmousedown="window.handleTapStart(event, ${i}, 1)" ontouchstart="window.handleTapStart(event, ${i}, 1)" onmouseup="window.handleTapEnd(event)" ontouchend="window.handleTapEnd(event)"></div>
-                <div class="flex-1 w-full h-full cursor-pointer active:bg-white/10 transition-colors" onmousedown="window.handleTapStart(event, ${i}, -1)" ontouchstart="window.handleTapStart(event, ${i}, -1)" onmouseup="window.handleTapEnd(event)" ontouchend="window.handleTapEnd(event)"></div>
+            
+            <div class="absolute inset-0 z-10 flex flex-col ${p.isDead ? 'hidden' : ''}" style="transform: rotate(${rotDeg}deg);">
+                <div id="tap-zone-${i}-plus" class="flex-1 w-full flex items-start justify-center cursor-pointer transition-colors duration-100 group" 
+                     onmousedown="window.handleTapStart(event, ${i}, 1)" ontouchstart="window.handleTapStart(event, ${i}, 1)" 
+                     onmouseup="window.handleTapEnd(event)" ontouchend="window.handleTapEnd(event)" onmouseleave="window.handleTapEnd(event)">
+                    <span class="material-symbols-outlined text-[4rem] text-white mt-4 opacity-10 group-hover:opacity-30 pointer-events-none drop-shadow-md">add</span>
+                </div>
+                <div id="tap-zone-${i}-minus" class="flex-1 w-full flex items-end justify-center cursor-pointer transition-colors duration-100 group" 
+                     onmousedown="window.handleTapStart(event, ${i}, -1)" ontouchstart="window.handleTapStart(event, ${i}, -1)" 
+                     onmouseup="window.handleTapEnd(event)" ontouchend="window.handleTapEnd(event)" onmouseleave="window.handleTapEnd(event)">
+                    <span class="material-symbols-outlined text-[4rem] text-white mb-4 opacity-10 group-hover:opacity-30 pointer-events-none drop-shadow-md">remove</span>
+                </div>
             </div>
+
             <div class="absolute inset-0 m-auto z-20 pointer-events-none flex flex-col justify-center items-center transition-opacity ${p.isDead ? 'opacity-20' : ''}" style="transform: rotate(${rotDeg}deg);">
-                <h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate w-full px-2 text-center">${esc(p.player)}</h3>   
+                <h3 class="text-2xl sm:text-3xl font-black uppercase tracking-widest text-white drop-shadow-md truncate w-full px-2 text-center mt-6">${esc(p.player)}</h3>   
                 <p class="text-[12px] sm:text-sm font-bold text-white/90 truncate mb-1 w-full px-2 text-center">${p.deck ? esc(p.deck.name) : ''}</p>
-                <span id="life-display-${i}" class="text-[clamp(4rem,12vh,9rem)] font-black tracking-tighter leading-none text-white">${p.life}</span>
+                <span id="life-display-${i}" class="text-[clamp(4rem,12vh,9rem)] font-black tracking-tighter leading-none text-white drop-shadow-lg">${p.life}</span>
                 <div class="w-full px-4 mt-2 flex justify-between items-center pointer-events-auto ${p.isDead ? 'hidden' : ''}">
                     <div class="flex gap-2 flex-wrap">${renderCmdrDamageIcons(p)}</div>
-                    <button aria-label="Commander Damage" onclick="window.openCmdrModal(${i}, ${rotDeg})" class="size-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white"><span class="material-symbols-outlined">swords</span></button>
+                    <button aria-label="Commander Damage" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" onclick="window.openCmdrModal(${i}, ${rotDeg})" class="size-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white relative z-30"><span class="material-symbols-outlined">swords</span></button>
                 </div>
             </div>${deadOverlay}
         </div>`;
@@ -251,7 +331,10 @@ window.openCmdrModal = function(idx, rotDeg) {
     document.getElementById('cmdr-modal').classList.remove('hidden'); 
 }
 
+// Como es en modal, mantenemos guardado estricto individual por seguridad
 window.changeCmdrDmg = function(tI, aI, v) { 
+    isBatchingLife = false; 
+    clearTimeout(lifeBatchTimeout);
     saveUndoState(); 
     let t = state.currentMatch[tI]; 
     let oldVal = t.cmdrDmg[aI] || 0; 
@@ -284,6 +367,15 @@ async function checkEliminations() {
     let alive = state.currentMatch.filter(p => !p.isDead); if (alive.length === 1 && state.currentMatch.length > 1) window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead));
 }
 
+// 🔄 ROTACIÓN DE MESA
+window.rotateTable = function() {
+    if (menuOpen) window.toggleCenterMenu();
+    if (state.currentMatch.length <= 1) return;
+    state.currentMatch.unshift(state.currentMatch.pop());
+    saveData();
+    renderBattlefield();
+}
+
 window.buildRadialMenu = function() {
     let radial = document.getElementById('radial-menu-overlay'); if (!radial) return;
     radial.querySelectorAll('.radial-btn').forEach(b => b.remove());
@@ -291,9 +383,13 @@ window.buildRadialMenu = function() {
     let wlColor = wakeLock !== null ? '#22c55e' : '#f87171';
     let wlBorder = wakeLock !== null ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
     
+    // Ahora con 6 botones perfectamente distribuidos (Añadido Rotate y cambiado Restart a ReturnToPairings)
     let btnsHtml = `
         <button aria-label="Undo" onclick="window.undoLastAction()" class="radial-btn" style="border-color: rgba(16,185,129,0.4); color: #34d399;">
             <span class="material-symbols-outlined">undo</span><span class="lbl">Undo</span>
+        </button>
+        <button aria-label="Rotate" onclick="window.rotateTable()" class="radial-btn" style="border-color: rgba(168,85,247,0.4); color: #c084fc;">
+            <span class="material-symbols-outlined">rotate_right</span><span class="lbl">Rotate</span>
         </button>
         <button aria-label="Roll D20" onclick="window.rollD20All()" class="radial-btn" style="border-color: rgba(59,130,246,0.4); color: #60a5fa;">
             <span class="material-symbols-outlined">casino</span><span class="lbl">D20</span>
@@ -301,8 +397,8 @@ window.buildRadialMenu = function() {
         <button id="btn-keep-awake" aria-label="Toggle Awake" onclick="window.handleWakeLockToggle()" class="radial-btn" style="border-color: ${wlBorder}; color: ${wlColor};">
             <span class="material-symbols-outlined">lightbulb</span><span class="lbl">Awake</span>
         </button>
-        <button aria-label="Reset Match" onclick="window.resetLife()" class="radial-btn" style="border-color: rgba(234,179,8,0.4); color: #facc15;">
-            <span class="material-symbols-outlined">refresh</span><span class="lbl">Reset</span>
+        <button aria-label="Restart Match" onclick="window.returnToPairings()" class="radial-btn" style="border-color: rgba(234,179,8,0.4); color: #facc15;">
+            <span class="material-symbols-outlined">group</span><span class="lbl">Restart</span>
         </button>
         <button aria-label="End Match" onclick="window.endMatchManual()" class="radial-btn" style="border-color: rgba(239,68,68,0.4); color: #f87171;">
             <span class="material-symbols-outlined">flag</span><span class="lbl">End</span>
@@ -330,9 +426,24 @@ window.toggleCenterMenu = function() {
 
 window.handleWakeLockToggle = async function() { const isActive = await toggleWakeLock(); mfModal.show(isActive ? "Awake ON" : "Awake OFF", "", "flare"); window.toggleCenterMenu(); }
 window.toggleKeepAwake = window.handleWakeLockToggle; 
-window.resetLife = async function() { window.toggleCenterMenu(); const c = await mfModal.show("Reset Match?", "Life back to 40.", "refresh", "confirm"); if (c) { state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; }); state.undoStack = []; state.matchDurationSeconds = 0; saveData(); renderBattlefield(); } }
 
-// 🛡️ D20 CORREGIDO: Estilo verde esmeralda, sin emojis extraños
+// 🔄 RESTART INTELIGENTE: Vuelve a Pairings con vidas reseteadas a 40 para un inicio limpio
+window.returnToPairings = async function() { 
+    window.toggleCenterMenu(); 
+    const c = await mfModal.show("Return to Pairings?", "Match will be paused and you will return to the pairings screen to reassign or restart.", "group", "confirm"); 
+    if (c) { 
+        releaseWakeLock(); 
+        clearInterval(matchInterval); 
+        state.currentMatch.forEach(m => { m.life = 40; m.cmdrDmg = {}; m.isDead = false; m.deathCause = null; m.killerId = null; m.timeOfDeath = null; m.deathQuote = ""; }); 
+        state.undoStack = []; 
+        state.matchDurationSeconds = 0; 
+        saveData(); 
+        buildResultsDOM();
+        switchScreen(4); 
+    } 
+}
+window.resetLife = window.returnToPairings; 
+
 window.rollD20All = function() { 
     window.toggleCenterMenu(); 
     document.getElementById('dice-modal').classList.remove('hidden'); 
