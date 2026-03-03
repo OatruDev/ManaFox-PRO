@@ -68,7 +68,6 @@ export function initCommander() {
 window.updateCount = function(t, v) { state[t] = Math.min(t === 'players' ? 6 : 20, Math.max(2, state[t] + v)); document.getElementById('count-' + t).innerText = state[t]; saveData(); }
 window.applyDandLPreset = function() { state.players = 2; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura"]; state.playerLocks = []; state.playerBans = [[], [4]]; saveData(); goToDecks(); }
 
-// 🛡️ MAZOS EXCLUSIVOS DJL:
 window.applyDJLPreset = function() { 
     state.players = 3; 
     const extraDJLDecks = [
@@ -257,17 +256,19 @@ window.handleTapStart = function(e, idx, amt, isLongPress = false) {
     }
 }
 
+// 🔥 ARREGLO MUERTE INSTANTÁNEA: Evaluamos eliminaciones fuera del temporizador de 2.5s para que sea instántaneo.
 window.handleTapEnd = function(e) { 
     if (e && e.cancelable && e.type !== 'mouseup') e.preventDefault(); 
     
     clearTimeout(window.tapInterval);
     clearInterval(window.tapRepeating);
 
+    checkEliminations(); // Gatillo inmediato.
+
     clearTimeout(lifeBatchTimeout);
     lifeBatchTimeout = setTimeout(() => {
         isBatchingLife = false;
         saveData(); 
-        checkEliminations();
     }, 2500);
 }
 
@@ -344,6 +345,7 @@ window.openCmdrModal = function(idx, rotDeg) {
     document.getElementById('cmdr-modal').classList.remove('hidden'); 
 }
 
+// 🔥 ARREGLO MUERTE INSTANTÁNEA: Evaluamos eliminaciones fuera del temporizador en Daño Cmdr
 window.changeCmdrDmg = function(tI, aI, v) { 
     isBatchingLife = false; 
     clearTimeout(lifeBatchTimeout);
@@ -364,6 +366,7 @@ window.changeCmdrDmg = function(tI, aI, v) {
 
 window.closeCmdrModal = function() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
+// Si no confirma la muerte, ejecuta un UNDO automático transparente
 async function checkEliminations() { 
     for (let i = 0; i < state.currentMatch.length; i++) { 
         let p = state.currentMatch[i]; if (p.isDead) continue;
@@ -373,7 +376,9 @@ async function checkEliminations() {
             if (isEliminated) { 
                 p.isDead = true; p.deathCause = cmdrDeath ? "cmdr_dmg" : "life_loss"; p.killerId = (cmdrDeath && state.currentMatch[kIdx]) ? state.currentMatch[kIdx].id : null; p.timeOfDeath = formatTimeISO(state.matchDurationSeconds || 0); p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)]; 
                 saveData(); renderBattlefield(); 
-            } 
+            } else {
+                window.undoLastAction(); // Deshace si le dio por accidente
+            }
         }  
     } 
     let alive = state.currentMatch.filter(p => !p.isDead); if (alive.length === 1 && state.currentMatch.length > 1) window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead));
@@ -514,14 +519,26 @@ window.showUltimateWinner = function(idx) {
             mode: 'commander', 
             duration: formatTimeISO(state.matchDurationSeconds), 
             winner_id: w.id,
-            players: state.currentMatch.map(p => ({
-                player_id: p.id,
-                name: p.player,
+            pairings: state.currentMatch.map(p => ({
+                id: p.id,
+                player: p.player,
                 deck: p.deck ? { id: p.deck.id, name: p.deck.name, colors: [...p.deck.colors] } : null,
+                life: p.life,
+                cmdrDmg: p.cmdrDmg,
+                isDead: p.isDead,
+                deathCause: p.deathCause,
+                killerId: p.killerId,
+                timeOfDeath: p.timeOfDeath,
+                themeVars: p.themeVars,
+                deathQuote: p.deathQuote
+            })),
+            participants: state.currentMatch.map(p => ({
+                player_id: p.id,
+                deck_id: p.deck ? p.deck.id : null,
                 result: p.id === w.id ? "winner" : "eliminated",
                 cause: p.deathCause,
                 killer: p.killerId,
-                at: p.timeOfDeath
+                eliminated_at: p.timeOfDeath
             }))
         };
 
@@ -541,14 +558,12 @@ window.showUltimateWinner = function(idx) {
     });
 }
 
-// 🛡️ TRUE PULL: Se salta la caché de GitHub consultando su API oficial
 window.syncCloudHistory = async function() {
     try {
         const btn = document.getElementById('sync-btn-icon');
         if (btn) btn.classList.add('animate-spin');
 
-        // Llamada a la API de GitHub para forzar la última versión sin caché
-        const res = await fetch('https://api.github.com/repos/OatruDev/ManaFox-PRO/contents/db.json', {
+        const res = await fetch(`https://api.github.com/repos/OatruDev/ManaFox-PRO/contents/db.json?t=${Date.now()}`, {
             headers: { 'Accept': 'application/vnd.github.v3.raw' },
             cache: 'no-store'
         });
@@ -594,17 +609,19 @@ window.startOver = function() {
     saveData(); switchScreen(1); renderHistory();
 }
 
+// 🔥 ARREGLO DB LOG: Ahora busca en "m.pairings" exactamente como lo guarda tu DB.
 function renderHistory() {
     const c = document.getElementById('history-container'); if(!c) return;
     if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); else document.getElementById('history-section').classList.add('hidden');      
     
     c.innerHTML = state.history.slice(0, 5).map((m, i) => {
-        if (!m.players) return ''; 
+        let wObj = null;
+        if (m.pairings) { wObj = m.pairings.find(p => p.id === m.winner_id); }
+        else if (m.players) { wObj = m.players.find(p => p.result === 'winner' || p.player_id === m.winner_id); }
 
-        let wObj = m.players.find(p => p.result === 'winner' || p.player_id === m.winner_id);
         if (!wObj) return '';
 
-        let pName = wObj.name;
+        let pName = wObj.name || wObj.player;
         let deckSection = '';
         
         if (wObj.deck) {
@@ -627,7 +644,7 @@ export function goBackCommander() {
 
 window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete?", "", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); saveMatchToGitHub(null); renderHistory(); } }
 
-// 🛡️ VALIDACIONES ESTRICTAS "SHAKE": Evita avanzar si hay campos vacíos.
+// 🛡️ VALIDACIONES ESTRICTAS "SHAKE"
 export function handleCommanderNext() {
     if (state.step === 1) goToDecks(); 
     else if (state.step === 2) { 
@@ -636,7 +653,7 @@ export function handleCommanderNext() {
             let inp = document.getElementById(`deck-input-${invalidIdx}`);
             if (inp) {
                 inp.focus();
-                inp.animate([{transform:'translateX(0)'},{transform:'translateX(-10px)'},{transform:'translateX(10px)'},{transform:'translateX(0)'}], {duration: 300});
+                inp.animate([ {transform:'translateX(0)'}, {transform:'translateX(-10px)'}, {transform:'translateX(10px)'}, {transform:'translateX(0)'} ], {duration: 300});
                 inp.classList.add('border-red-500');
                 setTimeout(() => inp.classList.remove('border-red-500'), 1500);
             }
@@ -653,7 +670,7 @@ export function handleCommanderNext() {
             let inp = document.getElementById(`p-in-${invalidIdx}`);
             if (inp) {
                 inp.focus();
-                inp.animate([{transform:'translateX(0)'},{transform:'translateX(-10px)'},{transform:'translateX(10px)'},{transform:'translateX(0)'}], {duration: 300});
+                inp.animate([ {transform:'translateX(0)'}, {transform:'translateX(-10px)'}, {transform:'translateX(10px)'}, {transform:'translateX(0)'} ], {duration: 300});
                 inp.classList.add('border-red-500');
                 setTimeout(() => inp.classList.remove('border-red-500'), 1500);
             }
