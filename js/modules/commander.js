@@ -105,6 +105,7 @@ function buildDeckDOM() {
 }
 
 window.updateDeckName = function(i, val) { state.deckData[i].name = val; saveData(); }
+window.updatePlayerName = function(i, val) { state.tempPlayerNames[i] = val; saveData(); } // Solución al error de state is not defined
 window.loadDeck = function(di, li) { const d = state.savedDecks[li]; state.deckData[di] = { id: d.id, name: d.name, colors: [...d.colors] }; buildDeckDOM(); saveData(); }
 window.toggleColor = function(di, mi) { const d = state.deckData[di]; d.colors = d.colors.includes(mi) ? d.colors.filter(c => c !== mi) : [...d.colors, mi]; buildDeckDOM(); saveData(); }
 window.removeDeck = function(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
@@ -170,7 +171,8 @@ function goToPlayers() {
             const isBanned = state.playerBans[i].includes(d.origIdx); const isDisabled = hasLock || (!isBanned && atBanLimit); const titleMsg = hasLock ? "Cannot ban when a deck is locked." : (isDisabled ? `Max bans reached (${maxBans})` : "Ban this deck");
             return `<button aria-label="${titleMsg}" onclick="window.toggleBan(${i}, ${d.origIdx})" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}"><span class="material-symbols-outlined text-[10px] align-middle mr-1">${isBanned ? 'block' : 'check_box_outline_blank'}</span> ${esc(d.name)}</button>`;
         }).join('');
-        c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button aria-label="Remove Player" onclick="window.removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label for="p-in-${i}" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block cursor-pointer">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="state.tempPlayerNames[${i}]=esc(this.value); saveData();" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="window.setPlayerLock(${i}, parseInt(this.value))" aria-label="Lock deck" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex justify-between items-center"><span>Vetoes (Bans)</span><span class="text-slate-600 font-normal normal-case text-[8px] flex items-center gap-1">Swipe <span class="material-symbols-outlined text-[10px]">arrow_forward</span></span></div><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`;
+        // Aplicado el nuevo oninput para evitar el crash
+        c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button aria-label="Remove Player" onclick="window.removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label for="p-in-${i}" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block cursor-pointer">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="window.updatePlayerName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="window.setPlayerLock(${i}, parseInt(this.value))" aria-label="Lock deck" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex justify-between items-center"><span>Vetoes (Bans)</span><span class="text-slate-600 font-normal normal-case text-[8px] flex items-center gap-1">Swipe <span class="material-symbols-outlined text-[10px]">arrow_forward</span></span></div><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`;
     }
     switchScreen(3);
 }
@@ -256,14 +258,13 @@ window.handleTapStart = function(e, idx, amt, isLongPress = false) {
     }
 }
 
-// 🔥 ARREGLO MUERTE INSTANTÁNEA: Evaluamos eliminaciones fuera del temporizador de 2.5s para que sea instántaneo.
 window.handleTapEnd = function(e) { 
     if (e && e.cancelable && e.type !== 'mouseup') e.preventDefault(); 
     
     clearTimeout(window.tapInterval);
     clearInterval(window.tapRepeating);
 
-    checkEliminations(); // Gatillo inmediato.
+    checkEliminations();
 
     clearTimeout(lifeBatchTimeout);
     lifeBatchTimeout = setTimeout(() => {
@@ -345,7 +346,6 @@ window.openCmdrModal = function(idx, rotDeg) {
     document.getElementById('cmdr-modal').classList.remove('hidden'); 
 }
 
-// 🔥 ARREGLO MUERTE INSTANTÁNEA: Evaluamos eliminaciones fuera del temporizador en Daño Cmdr
 window.changeCmdrDmg = function(tI, aI, v) { 
     isBatchingLife = false; 
     clearTimeout(lifeBatchTimeout);
@@ -366,7 +366,6 @@ window.changeCmdrDmg = function(tI, aI, v) {
 
 window.closeCmdrModal = function() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
-// Si no confirma la muerte, ejecuta un UNDO automático transparente
 async function checkEliminations() { 
     for (let i = 0; i < state.currentMatch.length; i++) { 
         let p = state.currentMatch[i]; if (p.isDead) continue;
@@ -377,7 +376,7 @@ async function checkEliminations() {
                 p.isDead = true; p.deathCause = cmdrDeath ? "cmdr_dmg" : "life_loss"; p.killerId = (cmdrDeath && state.currentMatch[kIdx]) ? state.currentMatch[kIdx].id : null; p.timeOfDeath = formatTimeISO(state.matchDurationSeconds || 0); p.deathQuote = loseQuotes[Math.floor(Math.random() * loseQuotes.length)]; 
                 saveData(); renderBattlefield(); 
             } else {
-                window.undoLastAction(); // Deshace si le dio por accidente
+                window.undoLastAction();
             }
         }  
     } 
@@ -609,7 +608,6 @@ window.startOver = function() {
     saveData(); switchScreen(1); renderHistory();
 }
 
-// 🔥 ARREGLO DB LOG: Ahora busca en "m.pairings" exactamente como lo guarda tu DB.
 function renderHistory() {
     const c = document.getElementById('history-container'); if(!c) return;
     if (state.history.length > 0) document.getElementById('history-section').classList.remove('hidden'); else document.getElementById('history-section').classList.add('hidden');      
@@ -644,7 +642,6 @@ export function goBackCommander() {
 
 window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete?", "", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); saveMatchToGitHub(null); renderHistory(); } }
 
-// 🛡️ VALIDACIONES ESTRICTAS "SHAKE"
 export function handleCommanderNext() {
     if (state.step === 1) goToDecks(); 
     else if (state.step === 2) { 
