@@ -7,8 +7,6 @@ import { saveMatchToGitHub } from './github-db.js';
 
 let wakeLock = null;
 let matchInterval = null;
-
-// Variables para el "Undo Inteligente" y Optimización de Batería
 let isBatchingLife = false;
 let lifeBatchTimeout = null;
 
@@ -69,7 +67,27 @@ export function initCommander() {
 
 window.updateCount = function(t, v) { state[t] = Math.min(t === 'players' ? 6 : 20, Math.max(2, state[t] + v)); document.getElementById('count-' + t).innerText = state[t]; saveData(); }
 window.applyDandLPreset = function() { state.players = 2; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura"]; state.playerLocks = []; state.playerBans = [[], [4]]; saveData(); goToDecks(); }
-window.applyDJLPreset = function() { state.players = 3; state.decks = 7; state.deckData = baseDecks.map(d => ({ ...d, colors: [...d.colors] })); state.tempPlayerNames = ["Daniel", "Laura", "Julio"]; state.playerLocks = []; state.playerBans = [[], [4], []]; saveData(); goToDecks(); }
+
+// 🛡️ MAZOS EXCLUSIVOS DJL:
+window.applyDJLPreset = function() { 
+    state.players = 3; 
+    const extraDJLDecks = [
+        { id: "DCK-DJL-001", name: "I am Hungry (Shelob)", colors: ['B', 'G'] },
+        { id: "DCK-DJL-002", name: "Counter Intelligence (Kilo)", colors: ['W', 'R', 'U'] },
+        { id: "DCK-DJL-003", name: "Jumpscare (Zimone)", colors: ['W', 'G'] },
+        { id: "DCK-DJL-004", name: "The Emperor (Palamecia)", colors: ['U', 'R'] },
+        { id: "DCK-DJL-005", name: "Final Fantasy (Hope)", colors: ['W', 'U'] },
+        { id: "DCK-DJL-006", name: "Final Fantasy (Cloud)", colors: ['W'] }
+    ];
+    const combinedDecks = [...baseDecks, ...extraDJLDecks];
+    state.decks = combinedDecks.length; 
+    state.deckData = combinedDecks.map(d => ({ ...d, colors: [...d.colors] })); 
+    state.tempPlayerNames = ["Daniel", "Laura", "Julio"]; 
+    state.playerLocks = []; 
+    state.playerBans = [[], [4], []]; 
+    saveData(); 
+    goToDecks(); 
+}
 
 function goToDecks() {
     if (state.deckData.length < state.decks) { let diff = state.decks - state.deckData.length; for(let i = 0; i < diff; i++) { state.deckData.push({ name: '', colors: [] }); } } 
@@ -205,12 +223,10 @@ function buildResultsDOM() {
 function initBattlefield() { playTransition(GIFS.BATTLE, 2600, async () => { renderBattlefield(); switchScreen(5); startMatchClock(); try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }); }
 function saveUndoState() { if (!state.undoStack) state.undoStack = []; state.undoStack.push(JSON.parse(JSON.stringify(state.currentMatch))); if (state.undoStack.length > 20) state.undoStack.shift(); }
 
-// 🔋 UNDO Y BATERÍA: Desacoplar guardado en disco y agrupar toques (Batching de 2.5s)
 window.handleTapStart = function(e, idx, amt, isLongPress = false) { 
     if (e && e.cancelable && e.type !== 'mousedown') e.preventDefault(); 
     if (state.currentMatch[idx].isDead) return; 
     
-    // Si es el primer toque de la ráfaga, creamos el "Undo" original.
     if (!isBatchingLife) {
         saveUndoState(); 
         isBatchingLife = true;
@@ -219,7 +235,6 @@ window.handleTapStart = function(e, idx, amt, isLongPress = false) {
     clearTimeout(lifeBatchTimeout);
     changeLife(idx, amt);
 
-    // Feedback Visual + Lógica de Long Press para +/- 5
     if (!isLongPress) {
         const zone = document.getElementById(`tap-zone-${idx}-${amt > 0 ? 'plus' : 'minus'}`);
         if(zone) {
@@ -228,9 +243,9 @@ window.handleTapStart = function(e, idx, amt, isLongPress = false) {
         }
         
         window.tapInterval = setTimeout(() => {
-            window.handleTapStart(null, idx, amt > 0 ? 4 : -4, true); // Suma los 4 que faltan para llegar a 5
+            window.handleTapStart(null, idx, amt > 0 ? 4 : -4, true); 
             window.tapRepeating = setInterval(() => {
-                window.handleTapStart(null, idx, amt > 0 ? 5 : -5, true); // Ráfaga de 5 en 5 si mantiene pulsado
+                window.handleTapStart(null, idx, amt > 0 ? 5 : -5, true); 
             }, 400);
         }, 500);
     } else {
@@ -251,12 +266,11 @@ window.handleTapEnd = function(e) {
     clearTimeout(lifeBatchTimeout);
     lifeBatchTimeout = setTimeout(() => {
         isBatchingLife = false;
-        saveData(); // Ahorro de batería: Guarda en disco solo 2.5s después de terminar de tocar
+        saveData(); 
         checkEliminations();
     }, 2500);
 }
 
-// Ahorro de Batería: Modifica el DOM directo sin repintar todo el Grid
 function changeLife(idx, amt) { 
     if (state.currentMatch[idx].isDead) return; 
     state.currentMatch[idx].life += amt; 
@@ -268,7 +282,6 @@ window.undoLastAction = function() {
     if (menuOpen) window.toggleCenterMenu(); 
     if (!state.undoStack || state.undoStack.length === 0) return mfModal.show("Undo", "No previous actions.", "info"); 
     
-    // Interrumpir cualquier Batching pendiente
     clearTimeout(lifeBatchTimeout);
     isBatchingLife = false;
     
@@ -331,7 +344,6 @@ window.openCmdrModal = function(idx, rotDeg) {
     document.getElementById('cmdr-modal').classList.remove('hidden'); 
 }
 
-// Como es en modal, mantenemos guardado estricto individual por seguridad
 window.changeCmdrDmg = function(tI, aI, v) { 
     isBatchingLife = false; 
     clearTimeout(lifeBatchTimeout);
@@ -367,7 +379,6 @@ async function checkEliminations() {
     let alive = state.currentMatch.filter(p => !p.isDead); if (alive.length === 1 && state.currentMatch.length > 1) window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead));
 }
 
-// 🔄 ROTACIÓN DE MESA
 window.rotateTable = function() {
     if (menuOpen) window.toggleCenterMenu();
     if (state.currentMatch.length <= 1) return;
@@ -383,7 +394,6 @@ window.buildRadialMenu = function() {
     let wlColor = wakeLock !== null ? '#22c55e' : '#f87171';
     let wlBorder = wakeLock !== null ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
     
-    // Ahora con 6 botones perfectamente distribuidos (Añadido Rotate y cambiado Restart a ReturnToPairings)
     let btnsHtml = `
         <button aria-label="Undo" onclick="window.undoLastAction()" class="radial-btn" style="border-color: rgba(16,185,129,0.4); color: #34d399;">
             <span class="material-symbols-outlined">undo</span><span class="lbl">Undo</span>
@@ -427,7 +437,6 @@ window.toggleCenterMenu = function() {
 window.handleWakeLockToggle = async function() { const isActive = await toggleWakeLock(); mfModal.show(isActive ? "Awake ON" : "Awake OFF", "", "flare"); window.toggleCenterMenu(); }
 window.toggleKeepAwake = window.handleWakeLockToggle; 
 
-// 🔄 RESTART INTELIGENTE: Vuelve a Pairings con vidas reseteadas a 40 para un inicio limpio
 window.returnToPairings = async function() { 
     window.toggleCenterMenu(); 
     const c = await mfModal.show("Return to Pairings?", "Match will be paused and you will return to the pairings screen to reassign or restart.", "group", "confirm"); 
@@ -532,12 +541,18 @@ window.showUltimateWinner = function(idx) {
     });
 }
 
+// 🛡️ TRUE PULL: Se salta la caché de GitHub consultando su API oficial
 window.syncCloudHistory = async function() {
     try {
         const btn = document.getElementById('sync-btn-icon');
         if (btn) btn.classList.add('animate-spin');
 
-        const res = await fetch('https://raw.githubusercontent.com/OatruDev/ManaFox-PRO/main/db.json?t=' + Date.now());
+        // Llamada a la API de GitHub para forzar la última versión sin caché
+        const res = await fetch('https://api.github.com/repos/OatruDev/ManaFox-PRO/contents/db.json', {
+            headers: { 'Accept': 'application/vnd.github.v3.raw' },
+            cache: 'no-store'
+        });
+        
         if (res.ok) {
             const data = await res.json();
             
@@ -612,14 +627,43 @@ export function goBackCommander() {
 
 window.deleteHistoryEntry = async function(idx) { const isConfirmed = await mfModal.show("Delete?", "", "delete", "confirm"); if (isConfirmed) { state.history.splice(idx, 1); saveData(); saveMatchToGitHub(null); renderHistory(); } }
 
+// 🛡️ VALIDACIONES ESTRICTAS "SHAKE": Evita avanzar si hay campos vacíos.
 export function handleCommanderNext() {
     if (state.step === 1) goToDecks(); 
-    else if (state.step === 2) { syncDecksToLibrary(); goToPlayers(); }
+    else if (state.step === 2) { 
+        let invalidIdx = state.deckData.findIndex(d => !d.name || d.name.trim() === "");
+        if (invalidIdx !== -1) {
+            let inp = document.getElementById(`deck-input-${invalidIdx}`);
+            if (inp) {
+                inp.focus();
+                inp.animate([{transform:'translateX(0)'},{transform:'translateX(-10px)'},{transform:'translateX(10px)'},{transform:'translateX(0)'}], {duration: 300});
+                inp.classList.add('border-red-500');
+                setTimeout(() => inp.classList.remove('border-red-500'), 1500);
+            }
+            return mfModal.show("Missing Information", "Please enter a name for all decks.", "warning");
+        }
+        syncDecksToLibrary(); 
+        goToPlayers(); 
+    }
     else if (state.step === 3) {
-        savePlayerInputs(); let nwP = false;
+        savePlayerInputs(); 
+        
+        let invalidIdx = state.tempPlayerNames.findIndex((p, i) => i < state.players && (!p || p.trim() === ""));
+        if (invalidIdx !== -1) {
+            let inp = document.getElementById(`p-in-${invalidIdx}`);
+            if (inp) {
+                inp.focus();
+                inp.animate([{transform:'translateX(0)'},{transform:'translateX(-10px)'},{transform:'translateX(10px)'},{transform:'translateX(0)'}], {duration: 300});
+                inp.classList.add('border-red-500');
+                setTimeout(() => inp.classList.remove('border-red-500'), 1500);
+            }
+            return mfModal.show("Missing Information", "Please enter names for all players.", "warning");
+        }
+
+        let nwP = false;
         for (let i = 0; i < state.players; i++) {
-            let v = state.tempPlayerNames[i] || 'Player ' + (i + 1); state.tempPlayerNames[i] = v;
-            if (v !== 'Player ' + (i + 1) && !state.savedPlayers.some(p => p.name.toLowerCase() === v.toLowerCase())) { 
+            let v = state.tempPlayerNames[i];
+            if (!state.savedPlayers.some(p => p.name.toLowerCase() === v.toLowerCase())) { 
                 let newId = v.toLowerCase() === 'daniel' ? 'FOX-00001' : generatePlayerID();
                 state.savedPlayers.push({ id: newId, name: v, addedAt: Date.now() }); nwP = true; 
             } 

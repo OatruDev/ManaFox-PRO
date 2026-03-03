@@ -7,7 +7,6 @@ export default async function handler(req, res) {
     const token = process.env.GITHUB_TOKEN?.trim();
     const REPO_OWNER = process.env.GITHUB_USER?.trim();
     
-    // 🔥 EL ARREGLO ESTÁ AQUÍ: Le decimos exactamente cómo se llama tu repo
     const REPO_NAME = 'ManaFox-PRO'; 
     const FILE_PATH = 'db.json';
 
@@ -23,27 +22,23 @@ export default async function handler(req, res) {
             'Accept': 'application/vnd.github.v3+json' 
         };
 
-        // 1. Leer el archivo
+        // 1. Obtener el archivo actual y su SHA
         const getRes = await fetch(url, { headers });
-        let currentContent = [];
         let sha = null;
 
         if (getRes.ok) {
             const data = await getRes.json();
             sha = data.sha;
-            const decodedText = Buffer.from(data.content, 'base64').toString('utf8');
-            currentContent = JSON.parse(decodedText);
         } else if (getRes.status !== 404) {
             const errData = await getRes.json().catch(() => ({}));
             return res.status(500).json({ error: 'GitHub Read Failed', details: errData.message || `HTTP ${getRes.status}` });
         }
 
-        // 2. Guardar partida
-        currentContent.unshift(req.body);
-        const jsonString = JSON.stringify(currentContent, null, 2);
+        // 2. Sobrescribir el contenido con el JSON completo (req.body)
+        const jsonString = JSON.stringify(req.body, null, 2);
         const contentEncoded = Buffer.from(jsonString, 'utf8').toString('base64');
 
-        const body = { message: `db: match ${req.body.id || 'auto'}`, content: contentEncoded };
+        const body = { message: `Sync DB: update matches/decks/players`, content: contentEncoded };
         if (sha) body.sha = sha;
 
         const putRes = await fetch(url, { method: 'PUT', headers, body: JSON.stringify(body) });
