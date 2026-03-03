@@ -73,4 +73,4 @@ ManaFox-PRO/
         ├── commander.js # Commander Engine, Life Batching & Smart Undo
         ├── jumpstart.js # Swiss matchmaking algorithm
         ├── market.js    # Scryfall API Fetcher
-        └── github-db.js # DB Payload Builder & Sync module
+        └── github-db.js # DB Payload Builder & Sync module 
