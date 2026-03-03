@@ -9,6 +9,7 @@ let wakeLock = null;
 let matchInterval = null;
 let isBatchingLife = false;
 let lifeBatchTimeout = null;
+let isProcessingWinner = false;
 
 async function toggleWakeLock() {
     if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; return false; } 
@@ -105,7 +106,7 @@ function buildDeckDOM() {
 }
 
 window.updateDeckName = function(i, val) { state.deckData[i].name = val; saveData(); }
-window.updatePlayerName = function(i, val) { state.tempPlayerNames[i] = val; saveData(); } // Solución al error de state is not defined
+window.updatePlayerName = function(i, val) { state.tempPlayerNames[i] = val; saveData(); }
 window.loadDeck = function(di, li) { const d = state.savedDecks[li]; state.deckData[di] = { id: d.id, name: d.name, colors: [...d.colors] }; buildDeckDOM(); saveData(); }
 window.toggleColor = function(di, mi) { const d = state.deckData[di]; d.colors = d.colors.includes(mi) ? d.colors.filter(c => c !== mi) : [...d.colors, mi]; buildDeckDOM(); saveData(); }
 window.removeDeck = function(i) { state.deckData.splice(i, 1); state.decks--; buildDeckDOM(); saveData(); }
@@ -135,7 +136,7 @@ window.openLibraryManager = function() {
         : customDecks.map(item => { 
             const d = item.d;
             const mH = (d.colors || []).map(col => `<i class="ms ms-${col.toLowerCase()} text-[12px]"></i>`).join(' '); 
-            return `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between"><div class="flex flex-col overflow-hidden pr-2"><span class="font-bold text-sm text-white truncate">${esc(d.name || 'Unknown')}</span><div class="flex gap-1 mt-1 text-slate-400">${mH}</div></div><button aria-label="Delete Deck" onclick="window.deleteSavedDeck(${item.index})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition active:scale-95 border border-red-500/20"><span class="material-symbols-outlined text-[18px]">delete</span></button></div>`; 
+            return `<div class="bg-app-surface-light p-3 rounded-xl border border-white/5 shadow-sm flex items-center justify-between"><div class="flex flex-col overflow-hidden pr-2"><span class="font-bold text-sm text-white truncate">${esc(d.name || 'Unknown')}</span><div class="flex gap-1 mt-1 text-slate-400">${mH}</div></div><button aria-label="Delete Deck" onclick="window.deleteSavedDeck(${item.index})" class="size-10 flex-none bg-red-900/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-50 hover:text-white transition active:scale-95 border border-red-500/20"><span class="material-symbols-outlined text-[18px]">delete</span></button></div>`; 
         }).join('');
 
     modal.innerHTML = `<div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col relative max-h-[80vh]"><button aria-label="Close" onclick="window.closeLibraryManager()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition z-20"><span class="material-symbols-outlined">close</span></button><h3 class="font-black text-xl mb-2 text-white tracking-widest uppercase flex items-center gap-2"><span class="material-symbols-outlined text-app-primary">library_books</span> Deck Library</h3><p class="text-[10px] text-slate-400 mb-4 uppercase tracking-widest">Saved custom decks</p><div class="space-y-3 overflow-y-auto no-scrollbar flex-1 pb-2">${libHtml}</div></div>`;
@@ -171,7 +172,6 @@ function goToPlayers() {
             const isBanned = state.playerBans[i].includes(d.origIdx); const isDisabled = hasLock || (!isBanned && atBanLimit); const titleMsg = hasLock ? "Cannot ban when a deck is locked." : (isDisabled ? `Max bans reached (${maxBans})` : "Ban this deck");
             return `<button aria-label="${titleMsg}" onclick="window.toggleBan(${i}, ${d.origIdx})" title="${titleMsg}" class="shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-colors ${isBanned ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-app-surface border-white/10 text-slate-400'} ${isDisabled ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'hover:border-white/30'}"><span class="material-symbols-outlined text-[10px] align-middle mr-1">${isBanned ? 'block' : 'check_box_outline_blank'}</span> ${esc(d.name)}</button>`;
         }).join('');
-        // Aplicado el nuevo oninput para evitar el crash
         c.innerHTML += `<div class="bg-app-surface p-4 rounded-xl border border-white/5 relative"><button aria-label="Remove Player" onclick="window.removePlayer(${i})" class="absolute right-3 top-2 text-red-400 hover:text-red-300 transition"><span class="material-symbols-outlined text-[14px]">delete</span></button><label for="p-in-${i}" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block cursor-pointer">Player ${i + 1}</label><div class="flex flex-col gap-2"><div class="relative"><span class="material-symbols-outlined absolute left-3 top-3 text-app-primary">person</span><input type="text" id="p-in-${i}" maxlength="20" oninput="window.updatePlayerName(${i}, this.value)" class="w-full bg-app-surface-light border-none rounded-xl py-3 pl-10 text-sm focus:ring-1 focus:ring-app-primary text-white" value="${esc(def)}" placeholder="Name"></div><div class="relative"><span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500 text-[18px]">lock</span><select id="p-lock-${i}" onchange="window.setPlayerLock(${i}, parseInt(this.value))" aria-label="Lock deck" class="w-full bg-app-surface-light text-slate-300 border-none rounded-xl py-2 pl-10 text-xs appearance-none">${deckOpts}</select></div></div><div class="mt-4 pt-4 border-t border-white/5"><div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex justify-between items-center"><span>Vetoes (Bans)</span><span class="text-slate-600 font-normal normal-case text-[8px] flex items-center gap-1">Swipe <span class="material-symbols-outlined text-[10px]">arrow_forward</span></span></div><div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">${bansHTML}</div></div></div>`;
     }
     switchScreen(3);
@@ -197,7 +197,7 @@ function executeAssignment() {
         let foxObj = state.savedPlayers.find(p => p.name.toLowerCase() === pN.toLowerCase()); let pId = foxObj ? foxObj.id : generatePlayerID();
         state.currentMatch.push({ id: pId, player: pN, deck: mDeck, life: 40, cmdrDmg: {}, isDead: false, deathCause: null, killerId: null, timeOfDeath: null, themeVars: getPlayerTheme(mDeck ? mDeck.colors : []), deathQuote: "" });
     }
-    state.remainingDecks = [...pool]; state.undoStack = []; saveData(); buildResultsDOM(); switchScreen(4);
+    state.remainingDecks = [...pool]; state.undoStack = []; isProcessingWinner = false; saveData(); buildResultsDOM(); switchScreen(4);
 }
 
 window.reassignDecks = function() { executeAssignment(); }
@@ -221,12 +221,12 @@ function buildResultsDOM() {
     }
 }
 
-function initBattlefield() { playTransition(GIFS.BATTLE, 2600, async () => { renderBattlefield(); switchScreen(5); startMatchClock(); try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }); }
+function initBattlefield() { isProcessingWinner = false; playTransition(GIFS.BATTLE, 2600, async () => { renderBattlefield(); switchScreen(5); startMatchClock(); try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }); }
 function saveUndoState() { if (!state.undoStack) state.undoStack = []; state.undoStack.push(JSON.parse(JSON.stringify(state.currentMatch))); if (state.undoStack.length > 20) state.undoStack.shift(); }
 
 window.handleTapStart = function(e, idx, amt, isLongPress = false) { 
     if (e && e.cancelable && e.type !== 'mousedown') e.preventDefault(); 
-    if (state.currentMatch[idx].isDead) return; 
+    if (state.currentMatch[idx].isDead || isProcessingWinner) return; 
     
     if (!isBatchingLife) {
         saveUndoState(); 
@@ -260,7 +260,8 @@ window.handleTapStart = function(e, idx, amt, isLongPress = false) {
 
 window.handleTapEnd = function(e) { 
     if (e && e.cancelable && e.type !== 'mouseup') e.preventDefault(); 
-    
+    if (isProcessingWinner) return;
+
     clearTimeout(window.tapInterval);
     clearInterval(window.tapRepeating);
 
@@ -347,6 +348,7 @@ window.openCmdrModal = function(idx, rotDeg) {
 }
 
 window.changeCmdrDmg = function(tI, aI, v) { 
+    if (isProcessingWinner) return;
     isBatchingLife = false; 
     clearTimeout(lifeBatchTimeout);
     saveUndoState(); 
@@ -367,6 +369,8 @@ window.changeCmdrDmg = function(tI, aI, v) {
 window.closeCmdrModal = function() { document.getElementById('cmdr-modal').classList.add('hidden'); }
 
 async function checkEliminations() { 
+    if (isProcessingWinner) return;
+
     for (let i = 0; i < state.currentMatch.length; i++) { 
         let p = state.currentMatch[i]; if (p.isDead) continue;
         let cmdrDeath = false; let kIdx = null; if (p.cmdrDmg) { for(let k in p.cmdrDmg) { if(p.cmdrDmg[k] >= 21) { cmdrDeath = true; kIdx = k; break; } } } 
@@ -380,7 +384,11 @@ async function checkEliminations() {
             }
         }  
     } 
-    let alive = state.currentMatch.filter(p => !p.isDead); if (alive.length === 1 && state.currentMatch.length > 1) window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead));
+    let alive = state.currentMatch.filter(p => !p.isDead); 
+    if (alive.length === 1 && state.currentMatch.length > 1) {
+        isProcessingWinner = true; 
+        window.showUltimateWinner(state.currentMatch.findIndex(p => !p.isDead));
+    }
 }
 
 window.rotateTable = function() {
@@ -503,15 +511,32 @@ window.rollD20All = function() {
     }, 50); 
 }
 
-window.endMatchManual = function() { window.toggleCenterMenu(); releaseWakeLock(); window.goToScreen6Manual(); }
-window.goToScreen6Manual = function() { clearInterval(matchInterval); state.matchFinished = false; switchScreen(6); document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div aria-label="Select Winner" onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-bold text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); }
+window.endMatchManual = function() { 
+    window.toggleCenterMenu(); 
+    releaseWakeLock(); 
+    window.goToScreen6Manual(); 
+}
+
+window.goToScreen6Manual = function() { 
+    clearInterval(matchInterval); 
+    state.matchFinished = false; 
+    switchScreen(6); 
+    document.getElementById('screen-6').innerHTML = `<div class="text-center mb-8"><h2 class="text-3xl font-black text-white uppercase tracking-tight">End Match</h2><p class="text-sm text-slate-400 mt-2">Select the winner manually.</p></div><div id="declare-winner-container" class="grid grid-cols-2 gap-4 w-full"></div>`; 
+    document.getElementById('declare-winner-container').innerHTML = state.currentMatch.map((m, i) => `<div aria-label="Select Winner" onclick="window.showUltimateWinner(${i})" class="bg-app-surface p-5 rounded-3xl border-2 border-white/5 relative cursor-pointer hover:border-white/30 shadow-md ${m.isDead ? 'opacity-50 grayscale' : ''}"><div class="flex flex-col items-center text-center relative z-10"><div class="size-14 rounded-full bg-app-surface-light border-2 border-app-primary flex items-center justify-center font-black text-xl text-white mb-2 uppercase">${esc(m.player[0])}</div><h3 class="font-bold text-lg truncate w-full">${esc(m.player)}</h3><p class="text-slate-500 text-[10px] uppercase font-bold">${m.isDead ? 'Eliminated' : 'Declare Winner'}</p></div></div>`).join(''); 
+}
 
 window.showUltimateWinner = function(idx) {
-    releaseWakeLock(); clearInterval(matchInterval);
+    if(state.matchFinished) return; 
+    state.matchFinished = true;
+    
+    releaseWakeLock(); 
+    clearInterval(matchInterval);
+    
     playTransition(GIFS.WINNER, 3200, () => {
-        state.matchFinished = true; const w = state.currentMatch[idx];
+        const w = state.currentMatch[idx];
         triggerConfetti(w.deck ? w.deck.colors : []);
         
+        // 💾 EL SNAPSHOT OPTIMIZADO (Sin participants, solo pairings inmutables)
         const matchRecord = { 
             id: 'MTC-' + Math.random().toString(36).substring(2,7).toUpperCase(), 
             date: new Date().toISOString(), 
@@ -523,26 +548,14 @@ window.showUltimateWinner = function(idx) {
                 player: p.player,
                 deck: p.deck ? { id: p.deck.id, name: p.deck.name, colors: [...p.deck.colors] } : null,
                 life: p.life,
-                cmdrDmg: p.cmdrDmg,
                 isDead: p.isDead,
-                deathCause: p.deathCause,
-                killerId: p.killerId,
-                timeOfDeath: p.timeOfDeath,
-                themeVars: p.themeVars,
-                deathQuote: p.deathQuote
-            })),
-            participants: state.currentMatch.map(p => ({
-                player_id: p.id,
-                deck_id: p.deck ? p.deck.id : null,
-                result: p.id === w.id ? "winner" : "eliminated",
-                cause: p.deathCause,
-                killer: p.killerId,
-                eliminated_at: p.timeOfDeath
+                deathCause: p.deathCause
             }))
         };
 
         state.history.unshift(matchRecord);
-        saveData(); renderHistory();
+        saveData(); 
+        renderHistory();
         saveMatchToGitHub(matchRecord); 
         
         document.getElementById('screen-6').innerHTML = `
@@ -605,6 +618,7 @@ window.startOver = function() {
     releaseWakeLock(); clearInterval(matchInterval);
     state.tempPlayerNames = []; state.matchFinished = false; state.currentMatch = []; state.undoStack = []; state.matchDurationSeconds = 0;      
     state.playerBans = []; state.playerLocks = []; state.deckData = []; state.step = 1;
+    isProcessingWinner = false;
     saveData(); switchScreen(1); renderHistory();
 }
 
