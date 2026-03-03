@@ -1,6 +1,105 @@
 {
   "matches": [
     {
+      "id": "MTC-S1LH9",
+      "date": "2026-03-03T02:44:45.687Z",
+      "mode": "commander",
+      "duration": "00:00:30",
+      "winner_id": "FOX-2C8GX",
+      "pairings": [
+        {
+          "id": "FOX-00001",
+          "player": "Daniel",
+          "deck": {
+            "id": "DCK-0000006",
+            "name": "Eldrazi Incursion (Ulalek)",
+            "colors": [
+              "W",
+              "U",
+              "B",
+              "R",
+              "G"
+            ]
+          },
+          "life": -4,
+          "cmdrDmg": {},
+          "isDead": true,
+          "deathCause": "life_loss",
+          "killerId": null,
+          "timeOfDeath": "00:00:20",
+          "themeVars": "--c1: rgba(250, 204, 21, 0.9); --c2: rgba(59, 130, 246, 0.9); --c3: rgba(124, 58, 237, 0.9); --c4: rgba(250, 204, 21, 0.9);",
+          "deathQuote": "Countered. Destroyed. Forgotten. 🪦"
+        },
+        {
+          "id": "FOX-2C8GX",
+          "player": "Laura",
+          "deck": {
+            "id": "DCK-UCIDZ0Q",
+            "name": "Final Fantasy (Hope)",
+            "colors": [
+              "W",
+              "U"
+            ]
+          },
+          "life": 40,
+          "cmdrDmg": {},
+          "isDead": false,
+          "deathCause": null,
+          "killerId": null,
+          "timeOfDeath": null,
+          "themeVars": "--c1: rgba(250, 204, 21, 0.9); --c2: rgba(59, 130, 246, 0.9); --c3: rgba(250, 204, 21, 0.9); --c4: rgba(59, 130, 246, 0.9);",
+          "deathQuote": ""
+        },
+        {
+          "id": "FOX-UG3YU",
+          "player": "Julio",
+          "deck": {
+            "id": "DCK-BV9BR9Y",
+            "name": "Counter Intelligence (Kilo)",
+            "colors": [
+              "W",
+              "R",
+              "U"
+            ]
+          },
+          "life": -1,
+          "cmdrDmg": {},
+          "isDead": true,
+          "deathCause": "life_loss",
+          "killerId": null,
+          "timeOfDeath": "00:00:30",
+          "themeVars": "--c1: rgba(250, 204, 21, 0.9); --c2: rgba(225, 29, 72, 0.9); --c3: rgba(59, 130, 246, 0.9); --c4: rgba(250, 204, 21, 0.9);",
+          "deathQuote": "Your Spark fades into the blind eternities... 🌑"
+        }
+      ],
+      "participants": [
+        {
+          "player_id": "FOX-00001",
+          "deck_id": "DCK-0000006",
+          "result": "eliminated",
+          "cause": "life_loss",
+          "killer": null,
+          "eliminated_at": "00:00:20"
+        },
+        {
+          "player_id": "FOX-2C8GX",
+          "deck_id": "DCK-UCIDZ0Q",
+          "result": "winner",
+          "cause": null,
+          "killer": null,
+          "eliminated_at": null
+        },
+        {
+          "player_id": "FOX-UG3YU",
+          "deck_id": "DCK-BV9BR9Y",
+          "result": "eliminated",
+          "cause": "life_loss",
+          "killer": null,
+          "eliminated_at": "00:00:30"
+        }
+      ]
+    },
+    {
       "id": "MTC-SAODE",
       "date": "2026-03-01T06:43:14.744Z",
       "date_display": "1/3/2026 07:43",
