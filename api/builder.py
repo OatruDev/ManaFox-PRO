@@ -2,8 +2,8 @@
 import json
 import logging
 import re
-import requests
-from scipy.stats import hypergeom
+import requests # type: ignore
+from scipy.stats import hypergeom  # type: ignore
 from urllib.parse import parse_qs, urlparse
 from http.server import BaseHTTPRequestHandler
 
@@ -70,14 +70,25 @@ RAMP_PACKAGES_DB = {
 }
 
 def fetch_commander_data(scryfall_url: str):
-    match = re.search(r'/([^/]+)$', scryfall_url)
-    if not match: raise ValueError("Invalid Scryfall URL.")
-    card_id = match.group(1)
-    response = requests.get(f"https://api.scryfall.com/cards/{card_id}")
+    # Solución 404: Extracción exacta de Set y Collector Number
+    match = re.search(r'scryfall\.com/card/([^/]+)/([^/]+)', scryfall_url)
+    if not match: 
+        raise ValueError("Invalid Scryfall URL. Format expected: https://scryfall.com/card/set/number/...")
+    
+    set_code = match.group(1)
+    collector_num = match.group(2)
+    
+    response = requests.get(f"https://api.scryfall.com/cards/{set_code}/{collector_num}")
+    
+    if response.status_code == 404:
+        raise ValueError("Card not found in Scryfall database. Ensure the link is correct.")
+        
     response.raise_for_status()
     data = response.json()
+    
     if data.get("legalities", {}).get("commander", "illegal") != "legal": 
         raise ValueError(f"{data['name']} is not legal in Commander.")
+        
     return {
         "name": data["name"],
         "mana_cost": data.get("mana_cost", ""),
