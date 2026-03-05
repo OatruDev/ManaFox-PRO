@@ -1,5 +1,5 @@
 // /js/modules/deckbuilder.js
-import { mfModal } from '../ui.js';
+import { mfModal, switchScreen } from '../ui.js';
 
 export async function generateDeckFromPython() {
     const input = document.getElementById('scryfall-input');
@@ -21,7 +21,7 @@ export async function generateDeckFromPython() {
         const jsonRes = await response.json();
         if (jsonRes.status === "error") throw new Error(jsonRes.message);
         
-        exportToMoxfield(jsonRes.data);
+        renderResultsScreen(jsonRes.data);
         if(input) input.value = ''; 
         
     } catch (error) {
@@ -35,89 +35,58 @@ function mapBasicLands(landName) {
     return basics[landName] || landName;
 }
 
-function exportToMoxfield(data) {
+function renderResultsScreen(data) {
+    // 1. Armar el texto para Moxfield
     let moxText = `// COMMANDER\n1 ${data.metadata.commander}\n\n`;
-    
-    moxText += `// RAMP ENGINE\n`;
-    data.ramp.forEach(c => moxText += `1 ${c}\n`);
-    moxText += `\n`;
-
-    moxText += `// DRAW & ADVANTAGE\n`;
-    data.decklist.draw.forEach(c => moxText += `1 ${c}\n`);
-    moxText += `\n`;
-
-    moxText += `// REMOVAL & INTERACTION\n`;
-    data.decklist.removal.forEach(c => moxText += `1 ${c}\n`);
-    moxText += `\n`;
-
-    moxText += `// BOARD WIPES\n`;
-    data.decklist.boardwipe.forEach(c => moxText += `1 ${c}\n`);
-    moxText += `\n`;
-
-    moxText += `// PROTECTION & FLEX\n`;
-    data.decklist.protection.forEach(c => moxText += `1 ${c}\n`);
-    moxText += `\n`;
-
-    moxText += `// SYNERGY CORE (${data.metadata.archetype.toUpperCase()})\n`;
-    data.decklist.synergy.forEach(c => moxText += `1 ${c}\n`);
-    moxText += `\n`;
-
+    moxText += `// RAMP ENGINE\n`; data.ramp.forEach(c => moxText += `1 ${c}\n`); moxText += `\n`;
+    moxText += `// CREATURE CORE\n`; data.decklist.creatures.forEach(c => moxText += `1 ${c}\n`); moxText += `\n`;
+    moxText += `// DRAW & ADVANTAGE\n`; data.decklist.draw.forEach(c => moxText += `1 ${c}\n`); moxText += `\n`;
+    moxText += `// REMOVAL & INTERACTION\n`; data.decklist.removal.forEach(c => moxText += `1 ${c}\n`); moxText += `\n`;
+    moxText += `// BOARD WIPES\n`; data.decklist.boardwipe.forEach(c => moxText += `1 ${c}\n`); moxText += `\n`;
+    moxText += `// PLANESWALKERS & PROTECTION\n`; data.decklist.protection_and_planeswalkers.forEach(c => moxText += `1 ${c}\n`); moxText += `\n`;
+    moxText += `// SYNERGY ARTIFACTS/ENCHANTMENTS (${data.metadata.archetype.toUpperCase()})\n`; data.decklist.synergy.forEach(c => moxText += `1 ${c}\n`); moxText += `\n`;
     moxText += `// MANA BASE (${data.metadata.total_lands} Lands - Karsten Optimized)\n`;
     data.decklist.utility_lands.forEach(c => moxText += `1 ${c}\n`);
-    data.decklist.basic_lands.forEach(l => {
-        moxText += `${l.count} ${mapBasicLands(l.type)}\n`;
-    });
+    data.decklist.basic_lands.forEach(l => { moxText += `${l.count} ${mapBasicLands(l.type)}\n`; });
 
-    navigator.clipboard.writeText(moxText).catch(err => console.error('Clipboard failed: ', err));
-
-    // Dynamic Game Plan Analysis
-    let topSynergy = data.decklist.synergy.slice(0, 3).join(", ");
+    // 2. Extraer datos para la guía dinámica
+    let topSynergy = data.decklist.creatures.slice(0, 3).join(", ");
     let topRamp = data.ramp.slice(0, 2).join(" and ");
-    let topWipes = data.decklist.boardwipe.length > 0 ? `Don't panic if you fall behind, drop ${data.decklist.boardwipe[0]} to reset.` : "Aggressive board control.";
 
-    let customHtml = `
-        <div class="flex flex-col gap-4 text-left w-full mt-2">
-            
-            <div class="bg-app-primary/10 border border-app-primary/30 p-4 rounded-2xl shadow-inner">
-                <h4 class="text-[10px] uppercase font-black text-app-primary tracking-[0.2em] mb-2 flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">psychology</span> Deck Blueprint
-                </h4>
-                <p class="text-xs text-white leading-relaxed font-medium mb-2">
-                    This <strong>${data.metadata.archetype.toUpperCase()}</strong> build relies heavily on early acceleration via ${topRamp}.
-                </p>
-                <p class="text-xs text-slate-300 leading-relaxed font-medium mb-2">
-                    Your core synergy engine is powered by highly-played EDHREC staples for this strategy, including <strong>${topSynergy}</strong>. Protect them at all costs using your interaction package.
-                </p>
-                <p class="text-xs text-slate-400 italic">
-                    💡 <strong>Pro Tip:</strong> You are running ${data.metadata.total_lands} optimized lands. ${topWipes}
-                </p>
-            </div>
-            
-            <div class="relative bg-black border border-white/10 rounded-2xl overflow-hidden shadow-xl">
-                <div class="bg-white/5 px-3 py-2 flex justify-between items-center border-b border-white/5">
-                    <span class="text-[9px] uppercase font-black text-slate-500 tracking-widest flex items-center gap-1">
-                        <span class="material-symbols-outlined text-[12px]">terminal</span> Moxfield Ready (99 Cards)
-                    </span>
-                    <span class="text-[9px] text-green-400 font-bold uppercase tracking-widest flex items-center gap-1">
-                        <span class="material-symbols-outlined text-[12px]">check</span> Copied
-                    </span>
-                </div>
-                <pre class="p-4 text-[10px] text-slate-300 h-48 overflow-y-auto no-scrollbar font-mono leading-relaxed"><code>${moxText}</code></pre>
-            </div>
-            
-            <button onclick="document.getElementById('mf-modal').classList.add('opacity-0', 'pointer-events-none', 'scale-95');" class="w-full bg-app-surface-light border border-white/10 text-white py-4 rounded-xl font-black hover:bg-white/10 transition active:scale-95 text-xs uppercase tracking-[0.2em] mt-2 shadow-sm">
-                To Moxfield!
-            </button>
-        </div>
-    `;
+    // 3. Inyectar en el DOM de la Screen 12
+    document.getElementById('forge-res-arch').innerText = data.metadata.archetype.toUpperCase();
+    document.getElementById('forge-res-ramp').innerText = topRamp;
+    document.getElementById('forge-res-syn').innerText = topSynergy;
+    document.getElementById('forge-res-lands').innerText = data.metadata.total_lands;
+    
+    document.getElementById('generated-deck-code').innerText = moxText;
 
-    mfModal.show(
-        "Full Deck Forged! ⚒️", 
-        `100% playable 99-card deck generated.`, 
-        "precision_manufacturing", 
-        "custom", 
-        customHtml
-    );
+    // 4. Ocultar modal y cambiar a la Screen 12
+    mfModal.hide();
+    switchScreen(12);
 }
 
+// Nueva función exclusiva para el botón de Copiar
+export function copyGeneratedDeck() {
+    const text = document.getElementById('generated-deck-code').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('btn-copy-deck');
+        const originalHtml = btn.innerHTML;
+        
+        btn.innerHTML = `<span class="material-symbols-outlined">check_circle</span> Copied to Clipboard!`;
+        btn.classList.add('bg-green-500', 'shadow-[0_0_20px_rgba(34,197,94,0.5)]');
+        btn.classList.remove('bg-app-primary', 'shadow-[0_0_20px_rgba(139,92,246,0.3)]');
+        
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.classList.remove('bg-green-500', 'shadow-[0_0_20px_rgba(34,197,94,0.5)]');
+            btn.classList.add('bg-app-primary', 'shadow-[0_0_20px_rgba(139,92,246,0.3)]');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
+}
+
+// Bindings Globales
 window.generateDeckFromPython = generateDeckFromPython;
+window.copyGeneratedDeck = copyGeneratedDeck;

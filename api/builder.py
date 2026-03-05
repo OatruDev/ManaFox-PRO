@@ -33,15 +33,15 @@ COMMANDER_ARCHETYPES = {
 
 RAMP_PACKAGES_DB = {
     "Basic Land Fetch": {"cards": ["Cultivate", "Kodama's Reach", "Rampant Growth", "Farseek"], "size": 4, "colors": ["G"], "weight": 1.0},
-    "Fast Artifacts": {"cards": ["Sol Ring", "Mana Crypt", "Mana Vault", "Chrome Mox", "Jeweled Lotus"], "size": 5, "colors": ["C"], "weight": 2.0},
+    # 🚨 Eliminados Jeweled Lotus y Mana Crypt por baneo
+    "Fast Artifacts": {"cards": ["Sol Ring", "Mana Vault", "Chrome Mox", "Lotus Petal", "Grim Monolith"], "size": 5, "colors": ["C"], "weight": 2.0},
     "2-Drop Rocks": {"cards": ["Arcane Signet", "Fellwar Stone", "Thought Vessel", "Mind Stone"], "size": 4, "colors": ["C"], "weight": 1.1},
     "Treasure Engine": {"cards": ["Dockside Extortionist", "Smothering Tithe", "Pitiless Plunderer"], "size": 3, "colors": ["R", "B", "W"], "weight": 1.4},
     "1-Drop Dorks": {"cards": ["Birds of Paradise", "Llanowar Elves", "Elvish Mystic", "Arbor Elf"], "size": 4, "colors": ["G"], "weight": 1.5},
     "Rituals": {"cards": ["Dark Ritual", "Cabal Ritual", "Jeska's Will", "Seething Song"], "size": 4, "colors": ["B", "R"], "weight": 1.3}
 }
 
-def get_scryfall_top_cards(query, limit=100):
-    """Extrae las mejores cartas de Scryfall ordenadas por popularidad en EDHREC."""
+def get_scryfall_top_cards(query):
     url = f"https://api.scryfall.com/cards/search?q={quote(query)}&order=edhrec"
     try:
         resp = requests.get(url)
@@ -97,7 +97,6 @@ def karsten_adjusted_lands(ramp_cards, draw_count):
     rocks = sum(1 for c in ramp_cards if c in ["Sol Ring", "Mana Crypt", "Mana Vault", "Arcane Signet", "Fellwar Stone", "Mind Stone", "Thought Vessel"])
     dorks = sum(1 for c in ramp_cards if "Elves" in c or "Birds" in c or "Elf" in c)
     other = len(ramp_cards) - rocks - dorks
-    
     cantrips = round(draw_count * 0.5)
     lands = 42.0 - (rocks / 3.0) - (cantrips / 3.5) - (dorks / 3.5) - (other / 3.0)
     return max(30, min(42, round(lands)))
@@ -115,18 +114,16 @@ def build_full_deck(commander_url):
     cmd = fetch_commander_data(commander_url)
     archetype = classify_archetype(cmd["oracle_text"])
     
-    # 1. Base Logic & Ramp
     ramp_slots = 8 if cmd["cmc"] <= 3 else (11 if cmd["cmc"] <= 5 else 14)
-    skeleton = {"draw": 10, "removal": 10, "boardwipe": 3, "protection": 6, "synergy": 0}
-    ramp_engine = select_ramp_packages(cmd["colors"], ramp_slots)
+    # 🚨 Modificación clave: Forzar una base sólida de Criaturas y Planeswalkers
+    skeleton = {"draw": 10, "removal": 10, "boardwipe": 3, "creatures": 22, "protection_and_planeswalkers": 5, "synergy": 0}
+    if archetype == "spell_slinger": skeleton["creatures"] = 10 # Excepción
     
-    # 2. Lands Math
+    ramp_engine = select_ramp_packages(cmd["colors"], ramp_slots)
     total_lands = karsten_adjusted_lands(ramp_engine["recommended_cards"], skeleton["draw"])
     skeleton["synergy"] = 99 - total_lands - ramp_engine["total_slots"] - sum(skeleton.values())
     
     ci_str = "".join(cmd["colors"]) if cmd["colors"] else "C"
-    
-    # 3. POPULATE REAL CARDS VIA SCRYFALL
     used_cards = set(ramp_engine["recommended_cards"])
     used_cards.add(cmd["name"])
     
@@ -134,17 +131,12 @@ def build_full_deck(commander_url):
     decklist["utility_lands"] = []
     decklist["basic_lands"] = []
     
-    # Fetch Top Staples
-    staples = get_scryfall_top_cards(f"id<={ci_str} f:commander -t:land -t:basic")
-    
-    # Fetch Synergy specifically using Archetype Keywords
+    staples = get_scryfall_top_cards(f"id<={ci_str} legal:commander -t:land -t:basic")
     kw_query = " OR ".join([f'o:"{kw}"' for kw in COMMANDER_ARCHETYPES.get(archetype, ["draw a card"])])
-    synergies = get_scryfall_top_cards(f"id<={ci_str} f:commander -t:land ({kw_query})")
-    
-    # Fetch Top Lands
-    top_lands = get_scryfall_top_cards(f"id<={ci_str} f:commander t:land -t:basic")
+    synergies = get_scryfall_top_cards(f"id<={ci_str} legal:commander -t:land ({kw_query})")
+    top_lands = get_scryfall_top_cards(f"id<={ci_str} legal:commander t:land -t:basic")
 
-    # A. Fill Utility / Dual Lands
+    # A. Tierras (Utility & Basics)
     multi_lands_target = round(total_lands * (0.65 if len(cmd["colors"]) > 1 else 0.15))
     for card in top_lands:
         if len(decklist["utility_lands"]) >= multi_lands_target: break
@@ -152,45 +144,49 @@ def build_full_deck(commander_url):
             decklist["utility_lands"].append(card['name'])
             used_cards.add(card['name'])
 
-    # B. Fill Basics
     basic_target = total_lands - len(decklist["utility_lands"])
     colors_to_distribute = cmd["colors"] if cmd["colors"] else ["C"]
     for c in colors_to_distribute:
         count = max(1, basic_target // len(colors_to_distribute))
         decklist["basic_lands"].append({"type": f"Basic {c}", "count": count})
 
-    # C. Fill Synergy Core first (to ensure the deck does its main thing)
+    # B. Llenar Criaturas primero desde la pool de Sinergia
     for card in synergies:
-        if len(decklist["synergy"]) >= skeleton["synergy"]: break
-        if card['name'] not in used_cards:
-            decklist["synergy"].append(card['name'])
-            used_cards.add(card['name'])
+        name, t_line = card['name'], card.get('type_line', '')
+        if name in used_cards: continue
+        if 'Creature' in t_line and len(decklist["creatures"]) < skeleton["creatures"]:
+            decklist["creatures"].append(name); used_cards.add(name)
+        elif len(decklist["synergy"]) < skeleton["synergy"]:
+            decklist["synergy"].append(name); used_cards.add(name)
 
-    # D. Fill Staples (Draw, Removal, Wipe, Protect)
+    # C. Llenar Staples (Roba, Destruye, Planeswalkers, etc)
     for card in staples:
-        txt = card.get('oracle_text', '').lower()
+        txt, t_line = card.get('oracle_text', '').lower(), card.get('type_line', '')
         name = card['name']
         if name in used_cards: continue
         
-        if len(decklist["draw"]) < skeleton["draw"] and ("draw" in txt or "scry" in txt):
+        # Completar criaturas si la sinergia no llegó a 22
+        if 'Creature' in t_line and len(decklist["creatures"]) < skeleton["creatures"]:
+            decklist["creatures"].append(name); used_cards.add(name)
+        elif len(decklist["draw"]) < skeleton["draw"] and ("draw" in txt or "scry" in txt):
             decklist["draw"].append(name); used_cards.add(name)
         elif len(decklist["removal"]) < skeleton["removal"] and ("destroy target" in txt or "exile target" in txt):
             decklist["removal"].append(name); used_cards.add(name)
         elif len(decklist["boardwipe"]) < skeleton["boardwipe"] and ("destroy all" in txt or "exile all" in txt or "damage to each" in txt):
             decklist["boardwipe"].append(name); used_cards.add(name)
-        elif len(decklist["protection"]) < skeleton["protection"] and ("hexproof" in txt or "indestructible" in txt or "counter target" in txt):
-            decklist["protection"].append(name); used_cards.add(name)
+        # Meter Planeswalkers y Protección
+        elif len(decklist["protection_and_planeswalkers"]) < skeleton["protection_and_planeswalkers"] and ("Planeswalker" in t_line or "hexproof" in txt or "indestructible" in txt or "counter target" in txt):
+            decklist["protection_and_planeswalkers"].append(name); used_cards.add(name)
 
-    # E. Fallback: If slots still empty, stuff remaining staples into synergy/flex
-    for cat in ["draw", "removal", "boardwipe", "protection", "synergy"]:
+    # D. Fallback de relleno por si quedan huecos
+    for cat in ["draw", "removal", "boardwipe", "protection_and_planeswalkers", "synergy", "creatures"]:
         while len(decklist[cat]) < skeleton[cat]:
             found = False
             for card in staples:
                 if card['name'] not in used_cards:
                     decklist[cat].append(card['name'])
                     used_cards.add(card['name'])
-                    found = True
-                    break
+                    found = True; break
             if not found: break
 
     return {
@@ -201,23 +197,15 @@ def build_full_deck(commander_url):
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+        self.send_response(200); self.send_header('Access-Control-Allow-Origin', '*'); self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS'); self.send_header('Access-Control-Allow-Headers', 'Content-Type'); self.end_headers()
 
     def do_POST(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
+        self.send_response(200); self.send_header('Content-type', 'application/json'); self.send_header('Access-Control-Allow-Origin', '*'); self.end_headers()
         try:
             length = int(self.headers['Content-Length'])
             payload = json.loads(self.rfile.read(length).decode('utf-8'))
             url = payload.get('url', '')
             if not url: raise ValueError("Scryfall URL required.")
-            
             result = build_full_deck(url)
             self.wfile.write(json.dumps({"status": "success", "data": result}).encode('utf-8'))
         except Exception as e:
