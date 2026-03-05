@@ -2,87 +2,65 @@
 import json
 import logging
 import re
-import requests # type: ignore
-from scipy.stats import hypergeom  # type: ignore
-from urllib.parse import parse_qs, urlparse
+import requests
+from scipy.stats import hypergeom
+from urllib.parse import quote
 from http.server import BaseHTTPRequestHandler
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
 COMMANDER_ARCHETYPES = {
-    "aggro": ["haste", "attack", "trample", "damage", "bloodthirst", "battalion"],
-    "control": ["counter", "bounce", "removal", "control", "detain"],
-    "combo": ["infinite", "combo", "storm", "win the game"],
-    "stax": ["stax", "prison", "lock", "tax", "slow", "can't attack", "costs more"],
-    "tempo": ["tempo", "evasion", "disrupt", "flash"],
-    "big_mana": ["ramp", "mana", "exponential", "x in cost"],
-    "value": ["goodstuff", "draw", "scry", "surveil", "investigate"],
-    "+1_counters": ["+1/+1", "counter", "grow", "outlast", "modular"],
-    "-1_counters": ["-1/-1", "wither", "infect"],
-    "aikido": ["copy", "steal", "opponent", "redirect"],
-    "artifacts": ["artifact", "construct", "golem", "equipment", "vehicle"],
-    "enchantress": ["enchantment", "aura", "saga", "constellation"],
-    "blink": ["blink", "flicker", "enter the battlefield", "leaves the battlefield"],
-    "chaos": ["chaos", "random", "coin", "roll"],
-    "clones": ["clone", "duplicate", "token copy"],
-    "discard": ["discard", "wheel", "hand disruption", "madness"],
-    "mill": ["mill", "self-mill", "put into graveyard from library"],
-    "reanimator": ["reanimate", "graveyard", "return target creature"],
-    "land_destruction": ["destroy target land", "land destruction"],
-    "infect": ["infect", "poison", "toxic", "proliferate"],
-    "superfriends": ["planeswalker", "loyalty"],
-    "taxes": ["hatebears", "tax", "pay"],
-    "lands_matter": ["landfall", "lands matter", "play an additional land"],
-    "tokens": ["token", "go-wide", "saproling", "create", "populate"],
-    "goad": ["goad", "attacks each combat"],
-    "voltron": ["voltron", "combat damage", "commander damage", "equipped", "enchanted"],
-    "pillowfort": ["pillowfort", "defend", "can't attack you"],
-    "auras": ["aura", "totem armor"],
-    "flying": ["flying", "bird", "angel", "dragon"],
-    "snow": ["snow"],
-    "x_spells": ["x in cost", "x spell"],
-    "landfall": ["landfall"],
-    "aristocrats": ["sacrifice", "aristocrats", "dies"],
-    "proliferate": ["proliferate"],
-    "artifact_tokens": ["treasure", "food", "clue", "blood"],
-    "stompy": ["stompy", "creature", "heavy creatures", "power 4 or greater"],
-    "spell_slinger": ["spell", "cast spell", "instant", "sorcery", "magecraft"],
-    "mutate": ["mutate"],
-    "multi_win": ["thassa's oracle", "alternate win", "win the game"]
+    "aggro": ["haste", "attack", "trample", "damage", "bloodthirst"],
+    "control": ["counter target", "return target", "destroy target", "exile"],
+    "combo": ["infinite", "storm", "win the game"],
+    "stax": ["can't attack", "costs more", "players can't"],
+    "tempo": ["evasion", "flash", "return target"],
+    "big_mana": ["add", "mana pool", "x"],
+    "value": ["draw a card", "scry", "surveil", "investigate"],
+    "+1_counters": ["+1/+1 counter", "proliferate"],
+    "-1_counters": ["-1/-1 counter", "wither", "infect"],
+    "artifacts": ["artifact", "equipment", "vehicle", "construct"],
+    "enchantress": ["enchantment", "aura", "constellation"],
+    "blink": ["exile target", "return it to the battlefield"],
+    "reanimator": ["return target creature card from your graveyard"],
+    "mill": ["put the top", "into their graveyard"],
+    "tokens": ["create", "token", "populate"],
+    "aristocrats": ["sacrifice a creature", "dies"],
+    "spell_slinger": ["instant or sorcery", "magecraft", "cast a spell"],
+    "voltron": ["equipped creature", "enchanted creature", "commander damage"]
 }
 
 RAMP_PACKAGES_DB = {
-    "Basic Land Fetch Ramp": {"cards": ["Cultivate", "Kodama's Reach", "Rampant Growth", "Migration Path"], "size": 4, "colors": ["G"], "tags": ["midrange", "value", "landfall"], "weight": 1.0, "type": "base"},
-    "Untapped Dual Fetch Ramp": {"cards": ["Nature's Lore", "Three Visits", "Farseek", "Skyshroud Claim"], "size": 4, "colors": ["G"], "tags": ["optimized", "combo", "aggro"], "weight": 1.2, "type": "base"},
-    "Landfall Ramp": {"cards": ["Roiling Regrowth", "Harrow", "Springbloom Druid"], "size": 3, "colors": ["G"], "tags": ["landfall", "lands_matter"], "weight": 1.5, "type": "synergy"},
-    "Extra Land Drop": {"cards": ["Exploration", "Azusa, Lost but Seeking", "Burgeoning", "Dryad of the Ilysian Grove"], "size": 4, "colors": ["G"], "tags": ["lands_matter", "big_mana"], "weight": 1.3, "type": "support"},
-    "Fast Mana Package": {"cards": ["Sol Ring", "Mana Crypt", "Mana Vault", "Chrome Mox", "Jeweled Lotus"], "size": 5, "colors": ["C"], "tags": ["combo", "stax", "cedh"], "weight": 2.0, "type": "explosive"},
-    "2-Mana Rock Package": {"cards": ["Arcane Signet", "Fellwar Stone", "Thought Vessel", "Mind Stone"], "size": 4, "colors": ["C"], "tags": ["control", "midrange", "spellslinger"], "weight": 1.1, "type": "base"},
-    "Treasure Engine Package": {"cards": ["Dockside Extortionist", "Smothering Tithe", "Pitiless Plunderer", "Grim Hireling"], "size": 4, "colors": ["R", "B", "W"], "tags": ["artifact_tokens", "aristocrats"], "weight": 1.4, "type": "explosive"},
-    "Cost Reducer Artifacts": {"cards": ["Cloud Key", "Helm of Awakening", "Semblance Anvil"], "size": 3, "colors": ["C"], "tags": ["artifacts", "storm", "spellslinger"], "weight": 1.2, "type": "support"},
-    "1-CMC Mana Dorks": {"cards": ["Birds of Paradise", "Llanowar Elves", "Elvish Mystic", "Fyndhorn Elves", "Arbor Elf"], "size": 5, "colors": ["G"], "tags": ["aggro", "stompy", "elfball"], "weight": 1.5, "type": "base"},
-    "Ritual Creatures": {"cards": ["Treasonous Ogre", "Runaway Steam-Kin", "Neheb, the Eternal"], "size": 3, "colors": ["R"], "tags": ["storm", "combo", "spellslinger"], "weight": 1.2, "type": "explosive"},
-    "One-Shot Rituals": {"cards": ["Dark Ritual", "Cabal Ritual", "Culling the Weak", "Jeska's Will", "Seething Song"], "size": 5, "colors": ["B", "R"], "tags": ["storm", "combo", "reanimator"], "weight": 1.3, "type": "explosive"},
-    "Land Aura Ramp": {"cards": ["Wild Growth", "Utopia Sprawl", "Fertile Ground", "Overgrowth"], "size": 4, "colors": ["G"], "tags": ["enchantress"], "weight": 1.4, "type": "base"},
-    "Mana Doublers": {"cards": ["Zendikar Resurgent", "Mirari's Wake", "Mana Reflection", "Cabal Coffers"], "size": 4, "colors": ["G", "B"], "tags": ["big_mana", "x_spells"], "weight": 1.2, "type": "late_game"},
-    "White Catch-up Ramp": {"cards": ["Land Tax", "Archaeomancer's Map", "Knight of the White Orchid", "Smuggler's Share"], "size": 4, "colors": ["W"], "tags": ["control", "midrange", "stax"], "weight": 1.1, "type": "base"}
+    "Basic Land Fetch": {"cards": ["Cultivate", "Kodama's Reach", "Rampant Growth", "Farseek"], "size": 4, "colors": ["G"], "weight": 1.0},
+    "Fast Artifacts": {"cards": ["Sol Ring", "Mana Crypt", "Mana Vault", "Chrome Mox", "Jeweled Lotus"], "size": 5, "colors": ["C"], "weight": 2.0},
+    "2-Drop Rocks": {"cards": ["Arcane Signet", "Fellwar Stone", "Thought Vessel", "Mind Stone"], "size": 4, "colors": ["C"], "weight": 1.1},
+    "Treasure Engine": {"cards": ["Dockside Extortionist", "Smothering Tithe", "Pitiless Plunderer"], "size": 3, "colors": ["R", "B", "W"], "weight": 1.4},
+    "1-Drop Dorks": {"cards": ["Birds of Paradise", "Llanowar Elves", "Elvish Mystic", "Arbor Elf"], "size": 4, "colors": ["G"], "weight": 1.5},
+    "Rituals": {"cards": ["Dark Ritual", "Cabal Ritual", "Jeska's Will", "Seething Song"], "size": 4, "colors": ["B", "R"], "weight": 1.3}
 }
 
+def get_scryfall_top_cards(query, limit=100):
+    """Extrae las mejores cartas de Scryfall ordenadas por popularidad en EDHREC."""
+    url = f"https://api.scryfall.com/cards/search?q={quote(query)}&order=edhrec"
+    try:
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            return resp.json().get('data', [])
+    except Exception as e:
+        logger.error(f"Scryfall query failed: {e}")
+    return []
+
 def fetch_commander_data(scryfall_url: str):
-    # Solución 404: Extracción exacta de Set y Collector Number
     match = re.search(r'scryfall\.com/card/([^/]+)/([^/]+)', scryfall_url)
     if not match: 
         raise ValueError("Invalid Scryfall URL. Format expected: https://scryfall.com/card/set/number/...")
     
-    set_code = match.group(1)
-    collector_num = match.group(2)
-    
+    set_code, collector_num = match.group(1), match.group(2)
     response = requests.get(f"https://api.scryfall.com/cards/{set_code}/{collector_num}")
     
     if response.status_code == 404:
-        raise ValueError("Card not found in Scryfall database. Ensure the link is correct.")
-        
+        raise ValueError("Card not found in Scryfall database.")
     response.raise_for_status()
     data = response.json()
     
@@ -103,120 +81,122 @@ def classify_archetype(oracle_text: str):
         if any(kw in text for kw in keywords): return arch
     return "midrange"
 
-def select_ramp_packages(colors, archetype, target_slots):
-    available_pkgs = []
-    for name, data in RAMP_PACKAGES_DB.items():
-        if any(c in colors for c in data["colors"]) or "C" in data["colors"]:
-            wt = data["weight"] + (1.0 if archetype in data["tags"] else 0.0)
-            available_pkgs.append({"name": name, "cards": data["cards"], "size": data["size"], "type": data["type"], "weight": wt})
-            
+def select_ramp_packages(colors, target_slots):
+    available_pkgs = [{"name": n, **d} for n, d in RAMP_PACKAGES_DB.items() if any(c in colors for c in d["colors"]) or "C" in d["colors"]]
     available_pkgs.sort(key=lambda x: x["weight"], reverse=True)
-    sel_cards, sel_pkgs = [], []
+    sel_cards = []
     
-    bases = [p for p in available_pkgs if p["type"] == "base"]
-    if bases:
-        best_base = bases[0]
-        sel_pkgs.append(best_base["name"])
-        sel_cards.extend(best_base["cards"][:best_base["size"]])
-        available_pkgs.remove(best_base)
-        
     for pkg in available_pkgs:
         if len(sel_cards) >= target_slots: break
-        if len(sel_cards) + pkg["size"] <= target_slots + 1:
-            sel_pkgs.append(pkg["name"])
-            sel_cards.extend(pkg["cards"][:pkg["size"]])
+        cards_to_add = pkg["cards"][:min(pkg["size"], target_slots - len(sel_cards))]
+        sel_cards.extend(cards_to_add)
             
-    return {"total_slots": target_slots, "packages_used": sel_pkgs, "recommended_cards": sel_cards[:target_slots]}
+    return {"total_slots": len(sel_cards), "recommended_cards": sel_cards}
 
-def karsten_adjusted_lands(ramp_packages, draw_count):
-    """
-    Motor Karsten V2: Base 42 lands. 
-    Reducciones por relevancia: Piedras > Cantrips > Dorks
-    """
-    rocks, dorks, other_ramp = 0, 0, 0
+def karsten_adjusted_lands(ramp_cards, draw_count):
+    rocks = sum(1 for c in ramp_cards if c in ["Sol Ring", "Mana Crypt", "Mana Vault", "Arcane Signet", "Fellwar Stone", "Mind Stone", "Thought Vessel"])
+    dorks = sum(1 for c in ramp_cards if "Elves" in c or "Birds" in c or "Elf" in c)
+    other = len(ramp_cards) - rocks - dorks
     
-    for pkg_name in ramp_packages:
-        size = RAMP_PACKAGES_DB[pkg_name]["size"]
-        name_l = pkg_name.lower()
-        if "rock" in name_l or "fast mana" in name_l or "treasure" in name_l or "artifact" in name_l:
-            rocks += size
-        elif "dork" in name_l or "creature" in name_l:
-            dorks += size
-        else:
-            other_ramp += size
-            
-    # Estimamos conservadoramente que ~50% de los slots de Draw son Cantrips (Coste 1-2)
     cantrips = round(draw_count * 0.5)
-    
-    lands = 42.0
-    lands -= (rocks / 3.0)        # 1 por cada 3 piedras
-    lands -= (cantrips / 3.5)     # 1 por cada 3-4 cantrips (avg 3.5)
-    lands -= (dorks / 3.5)        # 1 por cada 3-4 dorks
-    lands -= (other_ramp / 3.0)   # Compensación para Cultivate/Harrow
-    
+    lands = 42.0 - (rocks / 3.0) - (cantrips / 3.5) - (dorks / 3.5) - (other / 3.0)
     return max(30, min(42, round(lands)))
 
 def hypergeometric_sources(N, K, n, k): return 1 - hypergeom.cdf(k-1, N, K, n)
 
-def required_colored_sources(symbols_needed, turn_target, desired_prob=0.90):
+def required_colored_sources(symbols_needed, turn_target):
     if symbols_needed == 0: return 0
     n = 7 + (turn_target - 1) * 1.5
     for K in range(1, 60):
-        if hypergeometric_sources(99, K, int(n), symbols_needed) >= desired_prob: return K
+        if hypergeometric_sources(99, K, int(n), symbols_needed) >= 0.90: return K
     return 30
 
-def parse_color_symbols(mana_cost):
-    count = {}
-    for match in re.finditer(r'\{([WUBGR])\}', mana_cost):
-        c = match.group(1)
-        count[c] = count.get(c, 0) + 1
-    return count
-
-def build_mana_base(colors, total_lands, color_reqs):
-    if not colors: return [{"type": "colorless/utility", "count": total_lands}]
-    total_req = sum(color_reqs.values())
-    multi_lands = round(total_lands * (0.65 if len(colors) > 1 else 0.0))
-    basic_lands = total_lands - multi_lands
-    
-    mana_base = []
-    for c in colors:
-        req = color_reqs.get(c, 0)
-        cnt = round((basic_lands * req / total_req) if total_req else basic_lands / len(colors))
-        mana_base.append({"type": f"Basic {c}", "count": cnt})
-    
-    if multi_lands > 0: mana_base.append({"type": "Dual/Fetch/Triomes", "count": multi_lands})
-    return mana_base
-
-def build_commander_deck(commander_url):
+def build_full_deck(commander_url):
     cmd = fetch_commander_data(commander_url)
     archetype = classify_archetype(cmd["oracle_text"])
     
-    # 1. Base Skeleton
+    # 1. Base Logic & Ramp
     ramp_slots = 8 if cmd["cmc"] <= 3 else (11 if cmd["cmc"] <= 5 else 14)
-    skeleton = {"ramp": ramp_slots, "draw": 10, "removal": 10, "boardwipe": 3, "wincons": 3, "protection/flex": 6}
-    if archetype == "stax": skeleton["removal"] += 3; skeleton["draw"] -= 2
-    elif archetype == "spell_slinger": skeleton["draw"] += 4; skeleton["protection/flex"] -= 2
+    skeleton = {"draw": 10, "removal": 10, "boardwipe": 3, "protection": 6, "synergy": 0}
+    ramp_engine = select_ramp_packages(cmd["colors"], ramp_slots)
     
-    # 2. Select Ramp
-    ramp_engine = select_ramp_packages(cmd["colors"], archetype, ramp_slots)
+    # 2. Lands Math
+    total_lands = karsten_adjusted_lands(ramp_engine["recommended_cards"], skeleton["draw"])
+    skeleton["synergy"] = 99 - total_lands - ramp_engine["total_slots"] - sum(skeleton.values())
     
-    # 3. Karsten Theory V2 (42 Lands - Reductions)
-    total_lands = karsten_adjusted_lands(ramp_engine["packages_used"], skeleton["draw"])
+    ci_str = "".join(cmd["colors"]) if cmd["colors"] else "C"
     
-    # 4. Hypergeometric Color Requirements
-    symbols = parse_color_symbols(cmd["mana_cost"])
-    turn_target = max(1, int(cmd["cmc"]))
-    color_reqs = {c: required_colored_sources(count, turn_target) for c, count in symbols.items()}
-    mana_base = build_mana_base(cmd["colors"], total_lands, color_reqs)
+    # 3. POPULATE REAL CARDS VIA SCRYFALL
+    used_cards = set(ramp_engine["recommended_cards"])
+    used_cards.add(cmd["name"])
     
-    # 5. Final Synergy Fill
-    skeleton["synergy_core"] = 99 - total_lands - sum(v for k, v in skeleton.items() if k != "synergy_core")
+    decklist = {k: [] for k in skeleton.keys()}
+    decklist["utility_lands"] = []
+    decklist["basic_lands"] = []
+    
+    # Fetch Top Staples
+    staples = get_scryfall_top_cards(f"id<={ci_str} f:commander -t:land -t:basic")
+    
+    # Fetch Synergy specifically using Archetype Keywords
+    kw_query = " OR ".join([f'o:"{kw}"' for kw in COMMANDER_ARCHETYPES.get(archetype, ["draw a card"])])
+    synergies = get_scryfall_top_cards(f"id<={ci_str} f:commander -t:land ({kw_query})")
+    
+    # Fetch Top Lands
+    top_lands = get_scryfall_top_cards(f"id<={ci_str} f:commander t:land -t:basic")
+
+    # A. Fill Utility / Dual Lands
+    multi_lands_target = round(total_lands * (0.65 if len(cmd["colors"]) > 1 else 0.15))
+    for card in top_lands:
+        if len(decklist["utility_lands"]) >= multi_lands_target: break
+        if card['name'] not in used_cards:
+            decklist["utility_lands"].append(card['name'])
+            used_cards.add(card['name'])
+
+    # B. Fill Basics
+    basic_target = total_lands - len(decklist["utility_lands"])
+    colors_to_distribute = cmd["colors"] if cmd["colors"] else ["C"]
+    for c in colors_to_distribute:
+        count = max(1, basic_target // len(colors_to_distribute))
+        decklist["basic_lands"].append({"type": f"Basic {c}", "count": count})
+
+    # C. Fill Synergy Core first (to ensure the deck does its main thing)
+    for card in synergies:
+        if len(decklist["synergy"]) >= skeleton["synergy"]: break
+        if card['name'] not in used_cards:
+            decklist["synergy"].append(card['name'])
+            used_cards.add(card['name'])
+
+    # D. Fill Staples (Draw, Removal, Wipe, Protect)
+    for card in staples:
+        txt = card.get('oracle_text', '').lower()
+        name = card['name']
+        if name in used_cards: continue
+        
+        if len(decklist["draw"]) < skeleton["draw"] and ("draw" in txt or "scry" in txt):
+            decklist["draw"].append(name); used_cards.add(name)
+        elif len(decklist["removal"]) < skeleton["removal"] and ("destroy target" in txt or "exile target" in txt):
+            decklist["removal"].append(name); used_cards.add(name)
+        elif len(decklist["boardwipe"]) < skeleton["boardwipe"] and ("destroy all" in txt or "exile all" in txt or "damage to each" in txt):
+            decklist["boardwipe"].append(name); used_cards.add(name)
+        elif len(decklist["protection"]) < skeleton["protection"] and ("hexproof" in txt or "indestructible" in txt or "counter target" in txt):
+            decklist["protection"].append(name); used_cards.add(name)
+
+    # E. Fallback: If slots still empty, stuff remaining staples into synergy/flex
+    for cat in ["draw", "removal", "boardwipe", "protection", "synergy"]:
+        while len(decklist[cat]) < skeleton[cat]:
+            found = False
+            for card in staples:
+                if card['name'] not in used_cards:
+                    decklist[cat].append(card['name'])
+                    used_cards.add(card['name'])
+                    found = True
+                    break
+            if not found: break
 
     return {
-        "metadata": {"commander": cmd["name"], "cmc": cmd["cmc"], "color_identity": "".join(cmd["colors"]) if cmd["colors"] else "Colorless", "archetype": archetype},
-        "mana_base": {"total_lands": total_lands, "distribution": mana_base},
-        "ramp_engine": ramp_engine,
-        "deck_skeleton": skeleton
+        "metadata": {"commander": cmd["name"], "archetype": archetype, "total_lands": total_lands},
+        "ramp": ramp_engine["recommended_cards"],
+        "decklist": decklist
     }
 
 class handler(BaseHTTPRequestHandler):
@@ -233,14 +213,12 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            payload = json.loads(post_data.decode('utf-8'))
-            scryfall_url = payload.get('url', '')
-            if not scryfall_url: raise ValueError("URL de Scryfall requerida.")
-                
-            result = build_commander_deck(scryfall_url)
+            length = int(self.headers['Content-Length'])
+            payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            url = payload.get('url', '')
+            if not url: raise ValueError("Scryfall URL required.")
+            
+            result = build_full_deck(url)
             self.wfile.write(json.dumps({"status": "success", "data": result}).encode('utf-8'))
         except Exception as e:
-            logger.error(str(e))
             self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
