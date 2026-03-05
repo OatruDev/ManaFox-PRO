@@ -6,6 +6,7 @@ import { mfModal, applyThemeColors, switchScreen } from './ui.js';
 import { initCommander, handleCommanderNext, goBackCommander } from './modules/commander.js';
 import { initJumpstart, handleJumpstartNext, goBackJumpstart } from './modules/jumpstart.js';
 import './modules/market.js';
+import './modules/deckbuilder.js';
 
 document.addEventListener("DOMContentLoaded", () => { 
     preloadGifs();
@@ -33,7 +34,7 @@ function setupGlobalListeners() {
     const headerBtn = document.getElementById('btn-header-action');
     if (headerBtn) {
         headerBtn.addEventListener('click', () => {
-            if(state.step === 1 || state.step === 7) {
+            if(state.step === 1 || state.step === 7 || state.step === 11) {
                 renderAndOpenModeHub();
             } else {
                 if(state.gameMode === 'commander') goBackCommander();
@@ -94,7 +95,7 @@ function renderAndOpenModeHub() {
     modal.innerHTML = `
     <div class="bg-app-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col">
         <h3 class="font-black text-xl mb-6 text-center text-white tracking-widest uppercase">ManaFox Hub</h3>
-        <div class="space-y-4">
+        <div class="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar pb-2">
             <button id="btn-mode-cmd" class="w-full bg-app-surface-light hover:bg-white/10 border border-app-primary/40 rounded-2xl p-4 flex items-center gap-4 transition active:scale-95 text-left">
                 <div class="size-12 rounded-full bg-app-primary/20 text-app-primary flex items-center justify-center flex-none"><span class="material-symbols-outlined">swords</span></div>
                 <div><h4 class="font-black text-white">Commander FFA</h4><p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">Free for all • Life Counter</p></div>
@@ -102,6 +103,10 @@ function renderAndOpenModeHub() {
             <button id="btn-mode-js" class="w-full bg-app-surface-light hover:bg-white/10 border border-app-js/40 rounded-2xl p-4 flex items-center gap-4 transition active:scale-95 text-left">
                 <div class="size-12 rounded-full bg-app-js/20 text-app-js flex items-center justify-center flex-none"><span class="material-symbols-outlined">account_tree</span></div>
                 <div><h4 class="font-black text-white">Jumpstart Tourney</h4><p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">Swiss Engine • Pack Drafts</p></div>
+            </button>
+            <button id="btn-mode-forge" class="w-full bg-app-surface-light hover:bg-white/10 border border-purple-400/40 rounded-2xl p-4 flex items-center gap-4 transition active:scale-95 text-left">
+                <div class="size-12 rounded-full bg-purple-400/20 text-purple-400 flex items-center justify-center flex-none"><span class="material-symbols-outlined">auto_awesome</span></div>
+                <div><h4 class="font-black text-white">Deck Forge</h4><p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest">Karsten Math • Builder</p></div>
             </button>
             <button id="btn-mode-mkt" class="w-full bg-app-surface-light hover:bg-white/10 border border-app-market/40 rounded-2xl p-4 flex items-center gap-4 transition active:scale-95 text-left">
                 <div class="size-12 rounded-full bg-app-market/20 text-app-market flex items-center justify-center flex-none"><span class="material-symbols-outlined">storefront</span></div>
@@ -113,12 +118,19 @@ function renderAndOpenModeHub() {
     
     document.getElementById('btn-mode-cmd').addEventListener('click', () => changeMode('commander'));
     document.getElementById('btn-mode-js').addEventListener('click', () => changeMode('jumpstart'));
-    document.getElementById('btn-mode-mkt').addEventListener('click', () => { window.openMarketHub(); });
+    
+    document.getElementById('btn-mode-forge').addEventListener('click', () => {
+        document.getElementById('mode-modal').classList.replace('flex', 'hidden');
+        switchScreen(11);
+    });
+
+    document.getElementById('btn-mode-mkt').addEventListener('click', () => window.openMarketHub());
+    
     document.getElementById('btn-close-hub').addEventListener('click', () => {
-        modal.classList.add('hidden'); modal.classList.remove('flex');
+        document.getElementById('mode-modal').classList.replace('flex', 'hidden');
     });
     
-    modal.classList.remove('hidden'); modal.classList.add('flex');
+    modal.classList.replace('hidden', 'flex');
 }
 
 function changeMode(newMode) {
@@ -127,8 +139,7 @@ function changeMode(newMode) {
     try { localStorage.setItem('manafox-offline-state', JSON.stringify(state)); } catch(e) {}
     
     applyThemeColors();
-    document.getElementById('mode-modal').classList.add('hidden');
-    document.getElementById('mode-modal').classList.remove('flex');
+    document.getElementById('mode-modal').classList.replace('flex', 'hidden');
     
     switchScreen(state.step);
     if (newMode === 'commander') initCommander();
